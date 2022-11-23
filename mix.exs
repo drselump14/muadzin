@@ -40,6 +40,7 @@ defmodule Muadzin.MixProject do
       {:azan_ex, "~> 0.1.0", targets: @all_targets},
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
       {:nerves_pack, "~> 0.7.0", targets: @all_targets},
+      {:typed_struct, "~> 0.3.0"},
 
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version

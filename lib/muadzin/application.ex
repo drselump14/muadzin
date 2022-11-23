@@ -35,6 +35,7 @@ defmodule Muadzin.Application do
       # Children for all targets except host
       # Starts a worker by calling: Muadzin.Worker.start_link(arg)
       # {Muadzin.Worker, arg},
+      {Muadzin.Scheduler, []}
     ]
   end
 
