@@ -62,7 +62,7 @@ config :vintage_net,
        vintage_net_wifi: %{
          networks: [
            %{
-             ssid: "buffalo-sby-24",
+             ssid: System.get_env("WIFI_SSD"),
              key_mgmt: :wpa_psk,
              psk: System.get_env("WIFI_PASSWORD")
            }

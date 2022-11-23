@@ -3,8 +3,8 @@ defmodule Muadzin.Scheduler do
   Documentation for Muadzin Prayer.
   """
 
-  @coordinate %Azan.Coordinate{latitude: 35.67220046284479, longitude: 139.90246423845966}
-  @params Azan.CalculationMethod.muslim_world_league()
+  @latitude 35.67220046284479
+  @longitude 139.90246423845966
 
   alias Azan.PrayerTime
 
@@ -29,15 +29,24 @@ defmodule Muadzin.Scheduler do
   @impl true
   def init(_state) do
     setup_audio()
-    {:ok, generate_state() |> schedule_azan()}
+
+    state =
+      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
+      generate_state()
+
+    schedule_azan(next_prayer_name, time_to_azan)
+    {:ok, state}
   end
 
   @impl true
-  def handle_info(:play_azan, %__MODULE__{next_prayer_name: next_prayer_name}) do
-    play_azan(next_prayer_name)
-    new_state = generate_state()
+  def handle_info(:play_azan, %__MODULE__{next_prayer_name: _current_prayer_name}) do
+    # play_azan(current_prayer_name)
 
-    schedule_azan(new_state)
+    new_state =
+      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
+      generate_state()
+
+    schedule_azan(next_prayer_name, time_to_azan)
     {:noreply, %{new_state | azan_performed_at: Timex.now()}}
   end
 
@@ -52,33 +61,39 @@ defmodule Muadzin.Scheduler do
     AudioPlayer.play(azan_audio)
   end
 
+  def play_azan(prayer_name) when prayer_name in [:sunrise, :sunset] do
+    IO.puts("Skip playing azan for sunset and sunrise")
+  end
+
   def play_azan(_) do
     IO.puts("playing azan")
     azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.mp3")
     AudioPlayer.play(azan_audio)
   end
 
-  def should_azan_now?(prayer_name) do
-    prayer_time = fetch_prayer_time(:today) |> Map.get(prayer_name)
-    now = DateTime.utc_now()
-    prayer_time |> DateTime.diff(now, :second) |> abs() < 60
+  def generate_coordinate() do
+    %Azan.Coordinate{latitude: @latitude, longitude: @longitude}
   end
 
+  def generate_params() do
+    Azan.CalculationMethod.muslim_world_league()
+  end
+
+  # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
   def fetch_prayer_time(:today) do
-    date = DateTime.utc_now() |> DateTime.to_date()
-    @coordinate |> PrayerTime.find(date, @params)
+    date = DateTime.now!("Asia/Tokyo") |> DateTime.to_date()
+    generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
   def fetch_prayer_time(:tomorrow) do
-    date = DateTime.utc_now() |> DateTime.to_date() |> Date.add(1)
-    @coordinate |> PrayerTime.find(date, @params)
+    date = DateTime.now!("Asia/Tokyo") |> DateTime.to_date() |> Date.add(1)
+    generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
   @doc """
   Schedule azan for the next prayer
   The :none prayer is used to indicate that the next prayer is tomorrow
   """
-  @spec calc_time_to_azan(atom(), PrayerTime.t()) :: {atom(), integer()}
   def calc_time_to_azan(:none, _prayer_time) do
     next_prayer_name = :fajr
 
@@ -116,12 +131,10 @@ defmodule Muadzin.Scheduler do
     }
   end
 
-  @spec schedule_azan(__MODULE__.t()) :: __MODULE__.t()
+  @spec schedule_azan(atom(), integer()) :: any()
   defp schedule_azan(
-         %__MODULE__{
-           next_prayer_name: next_prayer_name,
-           time_to_azan: time_to_azan
-         } = state
+         next_prayer_name,
+         time_to_azan
        ) do
     IO.puts("Next prayer: #{next_prayer_name}, time to azan: #{time_to_azan} minutes")
 
@@ -130,7 +143,5 @@ defmodule Muadzin.Scheduler do
       :play_azan,
       time_to_azan * 1000 * 60
     )
-
-    state
   end
 end

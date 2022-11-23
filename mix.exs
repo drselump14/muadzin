@@ -34,13 +34,14 @@ defmodule Muadzin.MixProject do
       {:shoehorn, "~> 0.9.1"},
       {:ring_logger, "~> 0.8.5"},
       {:toolshed, "~> 0.2.26"},
+      {:typed_struct, "~> 0.3.0"},
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
 
       # Dependencies for all targets except :host
       {:audio_player, "~> 0.2.1", targets: @all_targets},
       {:azan_ex, "~> 0.1.0", targets: @all_targets},
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
       {:nerves_pack, "~> 0.7.0", targets: @all_targets},
-      {:typed_struct, "~> 0.3.0"},
 
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version
