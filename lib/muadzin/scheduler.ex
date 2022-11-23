@@ -15,10 +15,11 @@ defmodule Muadzin.Scheduler do
 
   typedstruct do
     field(:today_prayer_time, PrayerTime.t(), enforce: true)
-    field(:next_prayer, :atom, enforce: true)
-    field(:current_prayer, :atom, enforce: true)
+    field(:next_prayer_name, :atom, enforce: true)
+    field(:current_prayer_name, :atom, enforce: true)
     field(:time_to_azan, :integer, enforce: true)
-    field(:scheduled_time, Time.t(), enforce: true)
+    field(:scheduled_at, DateTime.t(), enforce: true)
+    field(:azan_performed_at, DateTime.t())
   end
 
   def start_link(_opts) do
@@ -26,18 +27,18 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def init(state) do
+  def init(_state) do
     setup_audio()
-    schedule_azan()
-    {:ok, state}
+    {:ok, generate_state() |> schedule_azan()}
   end
 
   @impl true
-  def handle_info(current_prayer, state) do
-    play_azan(current_prayer)
+  def handle_info(:play_azan, %__MODULE__{next_prayer_name: next_prayer_name}) do
+    play_azan(next_prayer_name)
+    new_state = generate_state()
 
-    schedule_azan()
-    {:noreply, state}
+    schedule_azan(new_state)
+    {:noreply, %{new_state | azan_performed_at: Timex.now()}}
   end
 
   def setup_audio() do
@@ -73,43 +74,63 @@ defmodule Muadzin.Scheduler do
     @coordinate |> PrayerTime.find(date, @params)
   end
 
+  @doc """
+  Schedule azan for the next prayer
+  The :none prayer is used to indicate that the next prayer is tomorrow
+  """
+  @spec calc_time_to_azan(atom(), PrayerTime.t()) :: {atom(), integer()}
   def calc_time_to_azan(:none, _prayer_time) do
-    next_prayer = :fajr
+    next_prayer_name = :fajr
 
     time_to_azan =
       fetch_prayer_time(:tomorrow)
-      |> PrayerTime.time_for_prayer(next_prayer)
+      |> PrayerTime.time_for_prayer(next_prayer_name)
       |> Timex.diff(Timex.now(), :minutes)
 
-    {next_prayer, time_to_azan}
+    {next_prayer_name, time_to_azan}
   end
 
-  def calc_time_to_azan(next_prayer, today_prayer_time) do
+  def calc_time_to_azan(next_prayer_name, today_prayer_time) do
     time_to_azan =
       today_prayer_time
-      |> PrayerTime.time_for_prayer(next_prayer)
+      |> PrayerTime.time_for_prayer(next_prayer_name)
       |> Timex.diff(Timex.now(), :minutes)
 
-    {next_prayer, time_to_azan}
+    {next_prayer_name, time_to_azan}
   end
 
-  def get_next_prayer() do
+  @spec generate_state() :: %__MODULE__{}
+  def generate_state do
     today_prayer_time = fetch_prayer_time(:today)
-    next_prayer = today_prayer_time |> PrayerTime.next_prayer(Timex.now())
+    next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(Timex.now())
+    current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(Timex.now())
+
+    {next_prayer_name, time_to_azan} = calc_time_to_azan(next_prayer_name, today_prayer_time)
+
+    %__MODULE__{
+      today_prayer_time: today_prayer_time,
+      next_prayer_name: next_prayer_name,
+      current_prayer_name: current_prayer_name,
+      time_to_azan: time_to_azan,
+      scheduled_at: Timex.now()
+    }
   end
 
-  defp schedule_azan() do
-    today_prayer_time = fetch_prayer_time(:today)
-    next_prayer = today_prayer_time |> PrayerTime.next_prayer(Timex.now())
-
-    {next_prayer, time_to_azan} = calc_time_to_azan(next_prayer, today_prayer_time)
-
-    IO.puts("Next prayer: #{next_prayer}, time to azan: #{time_to_azan} minutes")
+  @spec schedule_azan(__MODULE__.t()) :: __MODULE__.t()
+  defp schedule_azan(
+         %__MODULE__{
+           next_prayer_name: next_prayer_name,
+           time_to_azan: time_to_azan
+         } = state
+       ) do
+    IO.puts("Next prayer: #{next_prayer_name}, time to azan: #{time_to_azan} minutes")
 
     Process.send_after(
       self(),
-      next_prayer,
+      :play_azan,
       time_to_azan * 1000 * 60
     )
+
+    state
   end
 end
