@@ -39,8 +39,8 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def handle_info(:play_azan, %__MODULE__{next_prayer_name: _current_prayer_name}) do
-    # play_azan(current_prayer_name)
+  def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name}) do
+    play_azan(current_prayer_name)
 
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
@@ -56,17 +56,17 @@ defmodule Muadzin.Scheduler do
   end
 
   def play_azan(:fajr) do
-    IO.puts("playing fajr azan")
+    Logger.info("playing fajr azan")
     azan_audio = Path.join(:code.priv_dir(:muadzin), "azan-fajr.mp3")
     AudioPlayer.play(azan_audio)
   end
 
   def play_azan(prayer_name) when prayer_name in [:sunrise, :sunset] do
-    IO.puts("Skip playing azan for sunset and sunrise")
+    Logger.info("Skip playing azan for sunset and sunrise")
   end
 
   def play_azan(_) do
-    IO.puts("playing azan")
+    Logger.info("playing azan")
     azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.mp3")
     AudioPlayer.play(azan_audio)
   end
@@ -81,12 +81,12 @@ defmodule Muadzin.Scheduler do
 
   # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
   def fetch_prayer_time(:today) do
-    date = DateTime.now!("Asia/Tokyo") |> DateTime.to_date()
+    date = Timex.now() |> DateTime.to_date()
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
   def fetch_prayer_time(:tomorrow) do
-    date = DateTime.now!("Asia/Tokyo") |> DateTime.to_date() |> Date.add(1)
+    date = Timex.now() |> DateTime.to_date() |> Date.add(1)
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
@@ -136,7 +136,7 @@ defmodule Muadzin.Scheduler do
          next_prayer_name,
          time_to_azan
        ) do
-    IO.puts("Next prayer: #{next_prayer_name}, time to azan: #{time_to_azan} minutes")
+    Logger.info("Next prayer: #{next_prayer_name}, time to azan: #{time_to_azan} minutes")
 
     Process.send_after(
       self(),

@@ -20,6 +20,14 @@ config :nerves, :firmware, rootfs_overlay: "rootfs_overlay"
 
 config :nerves, source_date_epoch: "1668861439"
 
+config :logger, :logger_papertrail_backend,
+  url: System.get_env("PAPERTRAIL_URL"),
+  level: :debug,
+  format: "$time $metadata[$level] $message"
+
+config :logger,
+  backends: [:console, LoggerPapertrailBackend.Logger],
+  level: :debug
 
 if Mix.target() == :host do
   import_config "host.exs"

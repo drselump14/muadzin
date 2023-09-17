@@ -62,7 +62,7 @@ config :vintage_net,
        vintage_net_wifi: %{
          networks: [
            %{
-             ssid: System.get_env("WIFI_SSD"),
+             ssid: System.get_env("WIFI_SSID"),
              key_mgmt: :wpa_psk,
              psk: System.get_env("WIFI_PASSWORD")
            }
@@ -102,6 +102,7 @@ config :mdns_lite,
     }
   ]
 
+config(:tzdata, :data_dir, "/data/tzdata")
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # Uncomment to use target specific configurations
