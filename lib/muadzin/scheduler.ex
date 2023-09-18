@@ -57,8 +57,8 @@ defmodule Muadzin.Scheduler do
 
   def play_azan(:fajr) do
     Logger.info("playing fajr azan")
-    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan-fajr.mp3")
-    AudioPlayer.play(azan_audio)
+    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan-fajr.wav")
+    azan_audio |> play_audio()
   end
 
   def play_azan(prayer_name) when prayer_name in [:sunrise, :sunset] do
@@ -67,8 +67,15 @@ defmodule Muadzin.Scheduler do
 
   def play_azan(_) do
     Logger.info("playing azan")
-    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.mp3")
-    AudioPlayer.play(azan_audio)
+    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.wav")
+    azan_audio |> play_audio()
+  end
+
+  def play_audio(path) do
+    audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+    audio_player_args = Application.get_env(:muadzin, :audio_player_args)
+
+    System.cmd(audio_player_cmd, audio_player_args ++ [path])
   end
 
   def generate_coordinate() do

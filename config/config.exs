@@ -8,7 +8,15 @@ import Config
 # Enable the Nerves integration with Mix
 Application.start(:nerves_bootstrap)
 
-config :muadzin, target: Mix.target()
+audio_player_cmd = if Mix.target() in [:rpi, :rpi2, :rpi3], do: "aplay", else: "afplay"
+
+audio_player_args =
+  if Mix.target() in [:rpi, :rpi2, :rpi3], do: ["-q"], else: []
+
+config :muadzin,
+  target: Mix.target(),
+  audio_player_cmd: audio_player_cmd,
+  audio_player_args: audio_player_args
 
 # Customize non-Elixir parts of the firmware. See
 # https://hexdocs.pm/nerves/advanced-configuration.html for details.

@@ -9,7 +9,7 @@ defmodule Muadzin.MixProject do
     [
       app: @app,
       version: @version,
-      elixir: "~> 1.11",
+      elixir: "~> 1.14",
       archives: [nerves_bootstrap: "~> 1.11"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -30,14 +30,13 @@ defmodule Muadzin.MixProject do
   defp deps do
     [
       # Dependencies for all targets
-      {:nerves, "~> 1.7.16 or ~> 1.8.0 or ~> 1.9.0", runtime: false},
+      {:nerves, "~> 1.7.16 or ~> 1.8.0 or ~> 1.9.0 or ~> 1.10", runtime: false},
       {:shoehorn, "~> 0.9.1"},
-      {:ring_logger, "~> 0.8.5"},
-      {:toolshed, "~> 0.2.26"},
+      {:ring_logger, "~> 0.10.3"},
+      {:toolshed, "~> 0.3.1"},
       {:typed_struct, "~> 0.3.0"},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:audio_player, "~> 0.2.1"},
-      {:azan_ex, "~> 0.1.0"},
+      {:azan_ex, "~> 0.2.0"},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
