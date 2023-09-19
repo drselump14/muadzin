@@ -50,6 +50,11 @@ defmodule Muadzin.Scheduler do
     {:noreply, %{new_state | azan_performed_at: Timex.now()}}
   end
 
+  @impl true
+  def handle_call(:fetch_state, _, state) do
+    {:reply, state, state}
+  end
+
   def setup_audio() do
     System.cmd("amixer", ["cset", "numid=3", "1"])
     System.cmd("amixer", ["cset", "numid=1", "90%"])
@@ -68,7 +73,9 @@ defmodule Muadzin.Scheduler do
   def play_azan(_) do
     Logger.info("playing azan")
     azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.wav")
+    dua_after_azan_audio = Path.join(:code.priv_dir(:muadzin), "dua-after-the-azan.wav")
     azan_audio |> play_audio()
+    dua_after_azan_audio |> play_audio()
   end
 
   def play_audio(path) do
