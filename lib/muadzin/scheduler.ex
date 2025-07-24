@@ -5,6 +5,7 @@ defmodule Muadzin.Scheduler do
 
   @latitude 35.67220046284479
   @longitude 139.90246423845966
+  @timezone "Asia/Tokyo"
 
   alias Azan.PrayerTime
 
@@ -41,6 +42,7 @@ defmodule Muadzin.Scheduler do
   @impl true
   def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name}) do
     play_azan(current_prayer_name)
+    play_dua()
 
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
@@ -62,8 +64,7 @@ defmodule Muadzin.Scheduler do
 
   def play_azan(:fajr) do
     Logger.info("playing fajr azan")
-    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan-fajr.wav")
-    azan_audio |> play_audio()
+    play_audio("azan-fajr.wav")
   end
 
   def play_azan(prayer_name) when prayer_name in [:sunrise, :sunset] do
@@ -72,13 +73,13 @@ defmodule Muadzin.Scheduler do
 
   def play_azan(_) do
     Logger.info("playing azan")
-    azan_audio = Path.join(:code.priv_dir(:muadzin), "azan.wav")
-    dua_after_azan_audio = Path.join(:code.priv_dir(:muadzin), "dua-after-the-azan.wav")
-    azan_audio |> play_audio()
-    dua_after_azan_audio |> play_audio()
+    play_audio("azan.wav")
   end
 
-  def play_audio(path) do
+  def play_dua, do: play_audio("dua-after-the-azan.wav")
+
+  def play_audio(filename) do
+    path = Path.join(:code.priv_dir(:muadzin), filename)
     audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
     audio_player_args = Application.get_env(:muadzin, :audio_player_args)
 
@@ -95,7 +96,7 @@ defmodule Muadzin.Scheduler do
 
   # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
   def fetch_prayer_time(:today) do
-    date = Timex.now() |> DateTime.to_date()
+    date = Timex.now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date()
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
@@ -110,22 +111,29 @@ defmodule Muadzin.Scheduler do
   """
   def calc_time_to_azan(:none, _prayer_time) do
     next_prayer_name = :fajr
+    prayer_time = fetch_prayer_time(:tomorrow)
+
+    Logger.info("Next prayer: #{next_prayer_name}")
+    Logger.info(prayer_time |> inspect())
 
     time_to_azan =
-      fetch_prayer_time(:tomorrow)
+      prayer_time
       |> PrayerTime.time_for_prayer(next_prayer_name)
       |> Timex.diff(Timex.now(), :minutes)
 
-    {next_prayer_name, time_to_azan}
+    {next_prayer_name, time_to_azan, prayer_time}
   end
 
-  def calc_time_to_azan(next_prayer_name, today_prayer_time) do
+  def calc_time_to_azan(next_prayer_name, prayer_time) do
+    Logger.info("Next prayer: #{next_prayer_name}")
+    Logger.info(prayer_time |> inspect())
+
     time_to_azan =
-      today_prayer_time
+      prayer_time
       |> PrayerTime.time_for_prayer(next_prayer_name)
       |> Timex.diff(Timex.now(), :minutes)
 
-    {next_prayer_name, time_to_azan}
+    {next_prayer_name, time_to_azan, prayer_time}
   end
 
   @spec generate_state() :: %__MODULE__{}
@@ -134,10 +142,12 @@ defmodule Muadzin.Scheduler do
     next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(Timex.now())
     current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(Timex.now())
 
-    {next_prayer_name, time_to_azan} = calc_time_to_azan(next_prayer_name, today_prayer_time)
+    # Recalculate the prayer time
+    {next_prayer_name, time_to_azan, prayer_time} =
+      calc_time_to_azan(next_prayer_name, today_prayer_time)
 
     %__MODULE__{
-      today_prayer_time: today_prayer_time,
+      today_prayer_time: prayer_time,
       next_prayer_name: next_prayer_name,
       current_prayer_name: current_prayer_name,
       time_to_azan: time_to_azan,
