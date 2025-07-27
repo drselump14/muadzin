@@ -53,4 +53,4 @@
 --dot-iex /etc/iex.exs
 
 -user elixir
--run elixir start_iex
+-run elixir start_cli

@@ -32,11 +32,11 @@ defmodule Muadzin.MixProject do
       # Dependencies for all targets
       {:nerves, "~> 1.7.16 or ~> 1.8.0 or ~> 1.9.0 or ~> 1.10", runtime: false},
       {:shoehorn, "~> 0.9.1"},
-      {:ring_logger, "~> 0.10.3"},
-      {:toolshed, "~> 0.3.1"},
+      {:ring_logger, "~> 0.11.3"},
+      {:toolshed, "~> 0.4.2"},
       {:typed_struct, "~> 0.3.0"},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:azan_ex, "~> 0.2.0"},
+      {:azan_ex, "~> 0.3.0"},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
