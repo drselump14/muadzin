@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
+  "packages": [
+    "mise@latest",
+    "just@latest"
+  ],
+  "shell": {
+    "init_hook": [
+      "export MISE_DATA_DIR=$PWD/.devbox/mise_data",
+      "export MISE_CACHE_DIR=$PWD/.devbox/mise_cache",
+      "export MISE_INSTALL_PATH=$PWD/.devbox/mise_installs",
+      "export MISE_SHIMS_DIR=$PWD/.devbox/mise_shims",
+      "eval \"$(mise activate bash)\"",
+      "export PATH=\"$MISE_SHIMS_DIR:$PATH\"",
+      "mise trust",
+      "mise install",
+      "alias j=just",
+      "export MYSQL_HOME=$PWD/.devbox/virtenv/mysql"
+    ],
+    "persistent_dirs": [
+      ".devbox/mise_data",
+      ".devbox/mise_cache",
+      ".devbox/mise_installs"
+    ]
+  }
+}
