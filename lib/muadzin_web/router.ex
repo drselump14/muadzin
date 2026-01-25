@@ -18,6 +18,7 @@ defmodule MuadzinWeb.Router do
     pipe_through :browser
 
     live "/", PrayerTimesLive, :index
+    live "/settings", SettingsLive, :index
   end
 
   scope "/api", MuadzinWeb.Api do

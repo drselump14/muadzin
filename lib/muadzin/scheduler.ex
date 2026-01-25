@@ -3,11 +3,8 @@ defmodule Muadzin.Scheduler do
   Documentation for Muadzin Prayer.
   """
 
-  @latitude 35.67220046284479
-  @longitude 139.90246423845966
-  @timezone "Asia/Tokyo"
-
   alias Azan.PrayerTime
+  alias Muadzin.Settings
 
   use GenServer
   use TypedStruct
@@ -33,6 +30,9 @@ defmodule Muadzin.Scheduler do
   @impl true
   def init(_state) do
     setup_audio()
+
+    # Subscribe to settings updates
+    Phoenix.PubSub.subscribe(Muadzin.PubSub, "settings")
 
     state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
@@ -74,6 +74,20 @@ defmodule Muadzin.Scheduler do
     updated_state = %{new_state | azan_performed_at: DateTime.utc_now(), azan_playing: false}
     broadcast_state_update(updated_state)
     {:noreply, updated_state}
+  end
+
+  @impl true
+  def handle_info({:settings_updated, _settings}, _state) do
+    Logger.info("Settings updated, recalculating prayer times")
+
+    # Regenerate state with new location settings
+    new_state =
+      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
+      generate_state()
+
+    schedule_azan(next_prayer_name, time_to_azan)
+    broadcast_state_update(new_state)
+    {:noreply, new_state}
   end
 
   @impl true
@@ -161,7 +175,7 @@ defmodule Muadzin.Scheduler do
   end
 
   def generate_coordinate() do
-    %Azan.Coordinate{latitude: @latitude, longitude: @longitude}
+    %Azan.Coordinate{latitude: Settings.get_latitude(), longitude: Settings.get_longitude()}
   end
 
   def generate_params() do
@@ -170,12 +184,14 @@ defmodule Muadzin.Scheduler do
 
   # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
   def fetch_prayer_time(:today) do
-    date = DateTime.utc_now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date()
+    timezone = Settings.get_timezone()
+    date = DateTime.utc_now() |> Timex.Timezone.convert(timezone) |> DateTime.to_date()
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
   def fetch_prayer_time(:tomorrow) do
-    date = DateTime.utc_now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date() |> Date.add(1)
+    timezone = Settings.get_timezone()
+    date = DateTime.utc_now() |> Timex.Timezone.convert(timezone) |> DateTime.to_date() |> Date.add(1)
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 

@@ -1,0 +1,101 @@
+<div class="max-w-3xl mx-auto p-4 md:p-6 lg:p-8">
+  <div class="flex items-center justify-between mb-6 md:mb-8">
+    <h1 class="text-white text-2xl md:text-3xl lg:text-4xl font-bold border-b-4 border-white pb-3 md:pb-4">
+      Settings
+    </h1>
+    <.link navigate={~p"/"} class="text-white hover:text-gray-300 text-lg md:text-xl">
+      ← Back
+    </.link>
+  </div>
+
+  <%= if @success do %>
+    <div class="bg-green-600 text-white p-4 rounded-lg mb-6">
+      <%= @success %>
+    </div>
+  <% end %>
+
+  <%= if @error do %>
+    <div class="bg-red-600 text-white p-4 rounded-lg mb-6">
+      <%= @error %>
+    </div>
+  <% end %>
+
+  <div class="bg-neutral-900 rounded-xl p-6 md:p-8">
+    <h2 class="text-white text-xl md:text-2xl font-bold mb-4">Location Settings</h2>
+    <p class="text-gray-400 mb-6">
+      Configure your location for accurate prayer times. You can find your coordinates from
+      <a href="https://www.latlong.net/" target="_blank" class="text-blue-400 underline">latlong.net</a>
+    </p>
+
+    <form phx-submit="update_settings" class="space-y-6">
+      <div>
+        <label for="latitude" class="block text-white font-semibold mb-2">
+          Latitude
+        </label>
+        <input
+          type="text"
+          id="latitude"
+          name="latitude"
+          value={@latitude}
+          placeholder="e.g., 35.672200"
+          class="w-full bg-neutral-800 text-white border-2 border-neutral-700 rounded-lg px-4 py-3 focus:outline-none focus:border-white"
+          required
+        />
+        <p class="text-gray-500 text-sm mt-1">Range: -90 to 90</p>
+      </div>
+
+      <div>
+        <label for="longitude" class="block text-white font-semibold mb-2">
+          Longitude
+        </label>
+        <input
+          type="text"
+          id="longitude"
+          name="longitude"
+          value={@longitude}
+          placeholder="e.g., 139.902464"
+          class="w-full bg-neutral-800 text-white border-2 border-neutral-700 rounded-lg px-4 py-3 focus:outline-none focus:border-white"
+          required
+        />
+        <p class="text-gray-500 text-sm mt-1">Range: -180 to 180</p>
+      </div>
+
+      <div>
+        <label for="timezone" class="block text-white font-semibold mb-2">
+          Timezone
+        </label>
+        <input
+          type="text"
+          id="timezone"
+          name="timezone"
+          value={@timezone}
+          placeholder="e.g., Asia/Tokyo"
+          class="w-full bg-neutral-800 text-white border-2 border-neutral-700 rounded-lg px-4 py-3 focus:outline-none focus:border-white"
+          required
+        />
+        <p class="text-gray-500 text-sm mt-1">
+          Format: Continent/City (e.g., Asia/Tokyo, America/New_York).
+          See <a href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones" target="_blank" class="text-blue-400 underline">timezone list</a>
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        class="w-full bg-white text-black font-bold py-4 px-6 rounded-lg hover:bg-gray-200 transition-colors text-lg"
+      >
+        Save Settings
+      </button>
+    </form>
+
+    <div class="mt-8 p-4 bg-neutral-800 rounded-lg">
+      <h3 class="text-white font-bold mb-2">Common Locations</h3>
+      <ul class="text-gray-400 text-sm space-y-1">
+        <li>Tokyo, Japan: 35.672200, 139.902464 (Asia/Tokyo)</li>
+        <li>Mecca, Saudi Arabia: 21.422500, 39.826200 (Asia/Riyadh)</li>
+        <li>Jakarta, Indonesia: -6.208763, 106.845599 (Asia/Jakarta)</li>
+        <li>New York, USA: 40.712800, -74.006000 (America/New_York)</li>
+        <li>London, UK: 51.507400, -0.127800 (Europe/London)</li>
+      </ul>
+    </div>
+  </div>
+</div>
