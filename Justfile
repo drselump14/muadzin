@@ -1,12 +1,10 @@
-alias c := console
-
-load_iex_dev_mix := "iex --dot-iex iex_dev.exs -S mix"
+load_dot_iex := "iex --dot-iex iex_dev.exs -S mix"
 
 default:
   just -l
 
-console:
-  {{load_iex_dev_mix}}
+ds:
+  {{load_dot_iex}} phx.server
 
-setup:
-  mix deps.get
+c:
+  {{load_dot_iex}}

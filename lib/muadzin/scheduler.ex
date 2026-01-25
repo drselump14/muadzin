@@ -20,6 +20,8 @@ defmodule Muadzin.Scheduler do
     field(:azan_performed_at, DateTime.t())
     field(:audio_port, port())
     field(:azan_playing, boolean(), default: false)
+    field(:azan_process_pid, pid())
+    field(:azan_timer_ref, reference())
   end
 
   def start_link(opts) do
@@ -50,20 +52,49 @@ defmodule Muadzin.Scheduler do
 
     # Play azan in a separate process
     scheduler_pid = self()
-    spawn(fn ->
+    azan_pid = spawn(fn ->
       play_azan(current_prayer_name)
-      play_dua()
-      send(scheduler_pid, :azan_finished)
+      # Check if we should continue (not manually stopped)
+      send(scheduler_pid, {:check_continue_azan, self()})
+      receive do
+        :continue ->
+          play_dua()
+          send(scheduler_pid, :azan_finished)
+        :stop ->
+          :ok
+      after
+        1000 -> # Timeout fallback
+          play_dua()
+          send(scheduler_pid, :azan_finished)
+      end
     end)
 
     # Fallback: ensure we mark as finished even if audio hangs
-    Process.send_after(self(), :azan_finished, 5 * 60 * 1000) # Max 5 minutes
+    timer_ref = Process.send_after(self(), :azan_finished, 5 * 60 * 1000) # Max 5 minutes
 
-    {:noreply, %{state | azan_playing: true}}
+    {:noreply, %{state | azan_playing: true, azan_process_pid: azan_pid, azan_timer_ref: timer_ref}}
   end
 
+  # Azan still playing - tell spawned process to continue with dua
   @impl true
-  def handle_info(:azan_finished, _state) do
+  def handle_info({:check_continue_azan, pid}, %{azan_playing: true} = state) do
+    send(pid, :continue)
+    {:noreply, state}
+  end
+
+  # Azan was stopped manually - tell spawned process to stop
+  @impl true
+  def handle_info({:check_continue_azan, pid}, %{azan_playing: false} = state) do
+    send(pid, :stop)
+    {:noreply, state}
+  end
+
+  # Handle azan finished when it's actually playing (normal completion)
+  @impl true
+  def handle_info(:azan_finished, %{azan_playing: true, azan_timer_ref: timer_ref} = _state) do
+    # Cancel the fallback timer if it exists
+    if timer_ref, do: Process.cancel_timer(timer_ref)
+
     broadcast_azan_status(:stopped, nil)
 
     new_state =
@@ -71,9 +102,22 @@ defmodule Muadzin.Scheduler do
       generate_state()
 
     schedule_azan(next_prayer_name, time_to_azan)
-    updated_state = %{new_state | azan_performed_at: DateTime.utc_now(), azan_playing: false}
+
+    updated_state = %{new_state |
+      azan_performed_at: DateTime.utc_now(),
+      azan_playing: false,
+      azan_process_pid: nil,
+      azan_timer_ref: nil
+    }
+
     broadcast_state_update(updated_state)
     {:noreply, updated_state}
+  end
+
+  # Handle azan finished when already stopped (ignore duplicate messages)
+  @impl true
+  def handle_info(:azan_finished, %{azan_playing: false} = state) do
+    {:noreply, state}
   end
 
   @impl true
@@ -91,15 +135,19 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def handle_cast(:stop_azan, state) do
+  def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref} = state) do
     # Kill all audio processes (aplay, afplay, etc)
     audio_cmd = Application.get_env(:muadzin, :audio_player_cmd)
-    if audio_cmd do
-      System.cmd("pkill", ["-9", Path.basename(audio_cmd)])
-    end
+    if audio_cmd, do: System.cmd("pkill", ["-9", Path.basename(audio_cmd)])
+
+    # Kill the spawned azan process if alive
+    if pid && Process.alive?(pid), do: Process.exit(pid, :kill)
+
+    # Cancel the fallback timer if exists
+    if timer_ref, do: Process.cancel_timer(timer_ref)
 
     broadcast_azan_status(:stopped, nil)
-    {:noreply, %{state | azan_playing: false}}
+    {:noreply, %{state | azan_playing: false, azan_process_pid: nil, azan_timer_ref: nil}}
   end
 
   @impl true
