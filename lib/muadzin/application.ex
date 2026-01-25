@@ -16,6 +16,7 @@ defmodule Muadzin.Application do
         # Children for all targets
         # Starts a worker by calling: Muadzin.Worker.start_link(arg)
         # {Muadzin.Worker, arg},
+        {Phoenix.PubSub, name: Muadzin.PubSub}
       ] ++ children(target())
 
     Supervisor.start_link(children, opts)
@@ -27,6 +28,8 @@ defmodule Muadzin.Application do
       # Children that only run on the host
       # Starts a worker by calling: Muadzin.Worker.start_link(arg)
       # {Muadzin.Worker, arg},
+      {Muadzin.Scheduler, name: Muadzin.Scheduler},
+      MuadzinWeb.Endpoint
     ]
   end
 
@@ -35,7 +38,8 @@ defmodule Muadzin.Application do
       # Children for all targets except host
       # Starts a worker by calling: Muadzin.Worker.start_link(arg)
       # {Muadzin.Worker, arg},
-      {Muadzin.Scheduler, []}
+      {Muadzin.Scheduler, name: Muadzin.Scheduler},
+      MuadzinWeb.Endpoint
     ]
   end
 

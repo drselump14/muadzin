@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations for azan banner */
+@keyframes pulse-banner {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 30px rgba(255, 255, 255, 0.6);
+  }
+}
+
+@keyframes speaker-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.animate-pulse-banner {
+  animation: pulse-banner 2s ease-in-out infinite;
+}
+
+.animate-speaker-pulse {
+  animation: speaker-pulse 1.5s ease-in-out infinite;
+}

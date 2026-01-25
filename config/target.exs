@@ -99,10 +99,21 @@ config :mdns_lite,
       protocol: "epmd",
       transport: "tcp",
       port: 4369
+    },
+    %{
+      protocol: "http",
+      transport: "tcp",
+      port: 80
     }
   ]
 
 config(:tzdata, :data_dir, "/data/tzdata")
+
+# Configure Phoenix endpoint for Nerves target
+config :muadzin, MuadzinWeb.Endpoint,
+  http: [ip: {0, 0, 0, 0}, port: 80],
+  server: true
+
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # Uncomment to use target specific configurations

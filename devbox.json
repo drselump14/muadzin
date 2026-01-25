@@ -14,6 +14,7 @@
       "export PATH=\"$MISE_SHIMS_DIR:$PATH\"",
       "mise trust",
       "mise install",
+      "ARCHIVES='nerves_bootstrap'; HASH=$(echo \"$ARCHIVES\" | md5); if [ ! -f .devbox/.mix-archives-${HASH} ]; then rm -f .devbox/.mix-archives-*; for archive in $ARCHIVES; do mix archive.install hex $archive --force; done; touch .devbox/.mix-archives-${HASH}; fi",
       "alias j=just",
       "export MYSQL_HOME=$PWD/.devbox/virtenv/mysql"
     ],

@@ -14,7 +14,8 @@ defmodule Muadzin.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [{@app, release()}],
-      preferred_cli_target: [run: :host, test: :host]
+      preferred_cli_target: [run: :host, test: :host],
+      aliases: aliases()
     ]
   end
 
@@ -38,6 +39,19 @@ defmodule Muadzin.MixProject do
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:azan_ex, "~> 0.3.0"},
       {:domo, "~> 1.5.19", override: true},
+      {:tzdata, "~> 1.1"},
+
+      # Phoenix dependencies
+      {:phoenix, "~> 1.7.14"},
+      {:phoenix_live_view, "~> 0.20.17"},
+      {:jason, "~> 1.4"},
+      {:plug_cowboy, "~> 2.7"},
+      {:phoenix_html, "~> 4.0"},
+      {:phoenix_html_helpers, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.0"},
+      {:bun, "~> 1.3", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
@@ -73,6 +87,15 @@ defmodule Muadzin.MixProject do
       include_erts: &Nerves.Release.erts/0,
       steps: [&Nerves.Release.init/1, :assemble],
       strip_beams: Mix.env() == :prod or [keep: ["Docs"]]
+    ]
+  end
+
+  defp aliases do
+    [
+      setup: ["deps.get", "assets.setup", "assets.build"],
+      "assets.setup": ["tailwind.install --if-missing", "bun.install --if-missing"],
+      "assets.build": ["tailwind default", "bun default"],
+      "assets.deploy": ["tailwind default --minify", "bun default", "phx.digest"]
     ]
   end
 end

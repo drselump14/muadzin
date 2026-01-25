@@ -21,10 +21,13 @@ defmodule Muadzin.Scheduler do
     field(:time_to_azan, :integer, enforce: true)
     field(:scheduled_at, DateTime.t(), enforce: true)
     field(:azan_performed_at, DateTime.t())
+    field(:audio_port, port())
+    field(:azan_playing, boolean(), default: false)
   end
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %{})
+  def start_link(opts) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, %{}, name: name)
   end
 
   @impl true
@@ -36,20 +39,53 @@ defmodule Muadzin.Scheduler do
       generate_state()
 
     schedule_azan(next_prayer_name, time_to_azan)
+    broadcast_state_update(state)
     {:ok, state}
   end
 
   @impl true
-  def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name}) do
-    play_azan(current_prayer_name)
-    play_dua()
+  def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name} = state) do
+    # Broadcast that azan is starting
+    broadcast_azan_status(:started, current_prayer_name)
+
+    # Play azan in a separate process
+    scheduler_pid = self()
+    spawn(fn ->
+      play_azan(current_prayer_name)
+      play_dua()
+      send(scheduler_pid, :azan_finished)
+    end)
+
+    # Fallback: ensure we mark as finished even if audio hangs
+    Process.send_after(self(), :azan_finished, 5 * 60 * 1000) # Max 5 minutes
+
+    {:noreply, %{state | azan_playing: true}}
+  end
+
+  @impl true
+  def handle_info(:azan_finished, _state) do
+    broadcast_azan_status(:stopped, nil)
 
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
       generate_state()
 
     schedule_azan(next_prayer_name, time_to_azan)
-    {:noreply, %{new_state | azan_performed_at: Timex.now()}}
+    updated_state = %{new_state | azan_performed_at: DateTime.utc_now(), azan_playing: false}
+    broadcast_state_update(updated_state)
+    {:noreply, updated_state}
+  end
+
+  @impl true
+  def handle_cast(:stop_azan, state) do
+    # Kill all audio processes (aplay, afplay, etc)
+    audio_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+    if audio_cmd do
+      System.cmd("pkill", ["-9", Path.basename(audio_cmd)])
+    end
+
+    broadcast_azan_status(:stopped, nil)
+    {:noreply, %{state | azan_playing: false}}
   end
 
   @impl true
@@ -57,9 +93,42 @@ defmodule Muadzin.Scheduler do
     {:reply, state, state}
   end
 
+  @doc """
+  Get the current state of the scheduler
+  """
+  def get_state(server \\ __MODULE__) do
+    GenServer.call(server, :fetch_state)
+  end
+
+  defp broadcast_state_update(state) do
+    Phoenix.PubSub.broadcast(
+      Muadzin.PubSub,
+      "prayer_times",
+      {:prayer_times_updated, state}
+    )
+  end
+
+  defp broadcast_azan_status(status, prayer_name) do
+    Phoenix.PubSub.broadcast(
+      Muadzin.PubSub,
+      "prayer_times",
+      {:azan_status, status, prayer_name}
+    )
+  end
+
+  @doc """
+  Stop the currently playing azan
+  """
+  def stop_azan(server \\ __MODULE__) do
+    GenServer.cast(server, :stop_azan)
+  end
+
   def setup_audio() do
-    System.cmd("amixer", ["cset", "numid=3", "1"])
-    System.cmd("amixer", ["cset", "numid=1", "90%"])
+    # Only run audio setup on target (not on host)
+    if Application.get_env(:muadzin, :target) != :host do
+      System.cmd("amixer", ["cset", "numid=3", "1"])
+      System.cmd("amixer", ["cset", "numid=1", "90%"])
+    end
   end
 
   def play_azan(:fajr) do
@@ -79,11 +148,16 @@ defmodule Muadzin.Scheduler do
   def play_dua, do: play_audio("dua-after-the-azan.wav")
 
   def play_audio(filename) do
-    path = Path.join(:code.priv_dir(:muadzin), filename)
-    audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
-    audio_player_args = Application.get_env(:muadzin, :audio_player_args)
+    # Only play audio on target, not on host
+    if Application.get_env(:muadzin, :target) != :host do
+      path = Path.join(:code.priv_dir(:muadzin), filename)
+      audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+      audio_player_args = Application.get_env(:muadzin, :audio_player_args)
 
-    System.cmd(audio_player_cmd, audio_player_args ++ [path])
+      System.cmd(audio_player_cmd, audio_player_args ++ [path])
+    else
+      Logger.info("Skipping audio playback on host: #{filename}")
+    end
   end
 
   def generate_coordinate() do
@@ -96,12 +170,12 @@ defmodule Muadzin.Scheduler do
 
   # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
   def fetch_prayer_time(:today) do
-    date = Timex.now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date()
+    date = DateTime.utc_now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date()
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
   def fetch_prayer_time(:tomorrow) do
-    date = Timex.now() |> DateTime.to_date() |> Date.add(1)
+    date = DateTime.utc_now() |> Timex.Timezone.convert(@timezone) |> DateTime.to_date() |> Date.add(1)
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 
@@ -119,7 +193,7 @@ defmodule Muadzin.Scheduler do
     time_to_azan =
       prayer_time
       |> PrayerTime.time_for_prayer(next_prayer_name)
-      |> Timex.diff(Timex.now(), :minutes)
+      |> Timex.diff(DateTime.utc_now(), :minutes)
 
     {next_prayer_name, time_to_azan, prayer_time}
   end
@@ -131,7 +205,7 @@ defmodule Muadzin.Scheduler do
     time_to_azan =
       prayer_time
       |> PrayerTime.time_for_prayer(next_prayer_name)
-      |> Timex.diff(Timex.now(), :minutes)
+      |> Timex.diff(DateTime.utc_now(), :minutes)
 
     {next_prayer_name, time_to_azan, prayer_time}
   end
@@ -139,8 +213,8 @@ defmodule Muadzin.Scheduler do
   @spec generate_state() :: %__MODULE__{}
   def generate_state do
     today_prayer_time = fetch_prayer_time(:today)
-    next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(Timex.now())
-    current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(Timex.now())
+    next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(DateTime.utc_now())
+    current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(DateTime.utc_now())
 
     # Recalculate the prayer time
     {next_prayer_name, time_to_azan, prayer_time} =
@@ -151,7 +225,8 @@ defmodule Muadzin.Scheduler do
       next_prayer_name: next_prayer_name,
       current_prayer_name: current_prayer_name,
       time_to_azan: time_to_azan,
-      scheduled_at: Timex.now()
+      scheduled_at: DateTime.utc_now(),
+      azan_playing: false
     }
   end
 

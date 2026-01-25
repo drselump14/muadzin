@@ -37,6 +37,44 @@ config :logger,
   backends: [:console, LoggerPapertrailBackend.Logger],
   level: :debug
 
+# Configure Phoenix
+config :muadzin, MuadzinWeb.Endpoint,
+  url: [host: "localhost"],
+  secret_key_base: "muadzin_secret_key_base_for_development_and_production_use_at_least_64_bytes",
+  render_errors: [
+    formats: [html: MuadzinWeb.ErrorHTML],
+    layout: false
+  ],
+  pubsub_server: Muadzin.PubSub,
+  live_view: [signing_salt: "muadzin_secret_salt"]
+
+config :phoenix, :json_library, Jason
+
+config :logger, :console,
+  format: "$time $metadata[$level] $message\n",
+  metadata: [:request_id]
+
+# Configure Bun for asset bundling
+config :bun,
+  version: "1.0.21",
+  default: [
+    args: ~w(build js/app.js --outdir=../priv/static/assets --target=browser),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{}
+  ]
+
+# Configure Tailwind CSS
+config :tailwind,
+  version: "3.4.0",
+  default: [
+    args: ~w(
+      --config=tailwind.config.js
+      --input=css/app.css
+      --output=../priv/static/assets/app.css
+    ),
+    cd: Path.expand("../assets", __DIR__)
+  ]
+
 if Mix.target() == :host do
   import_config "host.exs"
 else
