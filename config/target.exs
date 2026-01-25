@@ -111,8 +111,11 @@ config(:tzdata, :data_dir, "/data/tzdata")
 
 # Configure Phoenix endpoint for Nerves target
 config :muadzin, MuadzinWeb.Endpoint,
+  url: [host: "nerves.local", port: 80, scheme: "http"],
   http: [ip: {0, 0, 0, 0}, port: 80],
-  server: true
+  server: true,
+  check_origin: false,
+  code_reloader: false
 
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

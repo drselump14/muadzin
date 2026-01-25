@@ -52,6 +52,7 @@ defmodule Muadzin.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:bun, "~> 1.3", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
+      {:cors_plug, "~> 3.0"},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
