@@ -37,14 +37,13 @@
     <div class="text-3xl md:text-4xl lg:text-5xl font-bold text-black mb-3 md:mb-4">
       <%= format_prayer_name(@next_prayer_name) %>
     </div>
-    <div class="text-4xl md:text-5xl lg:text-6xl font-bold text-black mb-2">
-      <%= @time_to_azan_formatted %>
-    </div>
     <div
-      :if={@time_to_azan < 60}
-      class="inline-block text-black font-semibold text-sm md:text-base bg-white px-4 py-2 border-2 border-black mt-2 animate-pulse"
+      phx-hook="Countdown"
+      data-next-prayer-time={@next_prayer_time_iso}
+      id="countdown-timer"
+      class="text-4xl md:text-5xl lg:text-6xl font-bold text-black mb-2"
     >
-      Approaching soon!
+      <%= @time_to_azan_formatted %>
     </div>
   </div>
 

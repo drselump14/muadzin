@@ -8,8 +8,6 @@ defmodule MuadzinWeb.PrayerTimesLive do
     # Subscribe to prayer times updates
     if connected?(socket) do
       PrayerTimes.subscribe()
-      # Send a tick message every 60 seconds to update the countdown
-      Process.send_after(self(), :tick, 60_000)
     end
 
     # Get initial state
@@ -25,15 +23,6 @@ defmodule MuadzinWeb.PrayerTimesLive do
 
   @impl true
   def handle_info({:prayer_times_updated, state}, socket) do
-    {:noreply, assign_state(socket, state)}
-  end
-
-  @impl true
-  def handle_info(:tick, socket) do
-    # Refresh state every minute
-    state = PrayerTimes.get_current_state()
-    # Schedule next tick
-    Process.send_after(self(), :tick, 60_000)
     {:noreply, assign_state(socket, state)}
   end
 
@@ -54,12 +43,21 @@ defmodule MuadzinWeb.PrayerTimesLive do
   end
 
   defp assign_state(socket, state) do
+    # Get next prayer time for client-side countdown
+    next_prayer_time = Azan.PrayerTime.time_for_prayer(state.today_prayer_time, state.next_prayer_name)
+    # Convert to ISO8601 string for JavaScript
+    next_prayer_time_iso = DateTime.to_iso8601(next_prayer_time)
+
+    # Calculate server-side as fallback
+    time_to_azan = DateTime.diff(next_prayer_time, DateTime.utc_now(), :minute)
+    time_to_azan_formatted = PrayerTimes.format_time_remaining(time_to_azan)
+
     assign(socket,
       today_prayer_time: state.today_prayer_time,
       next_prayer_name: state.next_prayer_name,
       current_prayer_name: state.current_prayer_name,
-      time_to_azan: state.time_to_azan,
-      time_to_azan_formatted: PrayerTimes.format_time_remaining(state.time_to_azan)
+      next_prayer_time_iso: next_prayer_time_iso,
+      time_to_azan_formatted: time_to_azan_formatted
     )
   end
 
