@@ -16,7 +16,7 @@ defmodule MuadzinWeb.PrayerTimesLive do
     socket =
       socket
       |> assign_state(state)
-      |> assign(azan_playing: state.azan_playing, current_azan_prayer: nil)
+      |> assign(azan_playing: state.azan_playing, current_azan_prayer: nil, debug_logs: [])
 
     {:ok, socket}
   end
@@ -37,9 +37,29 @@ defmodule MuadzinWeb.PrayerTimesLive do
   end
 
   @impl true
+  def handle_info({:debug_log, message}, socket) do
+    # Add to debug logs, keep last 50
+    debug_logs = [%{timestamp: DateTime.utc_now(), message: message} | socket.assigns.debug_logs]
+    |> Enum.take(50)
+
+    {:noreply, assign(socket, debug_logs: debug_logs)}
+  end
+
+  @impl true
   def handle_event("stop_azan", _params, socket) do
     Muadzin.Scheduler.stop_azan()
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("trigger_azan", _params, socket) do
+    Muadzin.Scheduler.trigger_azan()
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_logs", _params, socket) do
+    {:noreply, assign(socket, debug_logs: [])}
   end
 
   defp assign_state(socket, state) do

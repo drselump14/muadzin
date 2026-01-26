@@ -47,30 +47,12 @@ defmodule Muadzin.Scheduler do
 
   @impl true
   def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name} = state) do
-    # Broadcast that azan is starting
+    debug_log("Playing azan for #{current_prayer_name}")
+
     broadcast_azan_status(:started, current_prayer_name)
 
-    # Play azan in a separate process
-    scheduler_pid = self()
-    azan_pid = spawn(fn ->
-      play_azan(current_prayer_name)
-      # Check if we should continue (not manually stopped)
-      send(scheduler_pid, {:check_continue_azan, self()})
-      receive do
-        :continue ->
-          play_dua()
-          send(scheduler_pid, :azan_finished)
-        :stop ->
-          :ok
-      after
-        1000 -> # Timeout fallback
-          play_dua()
-          send(scheduler_pid, :azan_finished)
-      end
-    end)
-
-    # Fallback: ensure we mark as finished even if audio hangs
-    timer_ref = Process.send_after(self(), :azan_finished, 5 * 60 * 1000) # Max 5 minutes
+    azan_pid = spawn(fn -> run_azan_sequence(current_prayer_name, self()) end)
+    timer_ref = Process.send_after(self(), :azan_finished, 5 * 60 * 1000)
 
     {:noreply, %{state | azan_playing: true, azan_process_pid: azan_pid, azan_timer_ref: timer_ref}}
   end
@@ -103,11 +85,12 @@ defmodule Muadzin.Scheduler do
 
     schedule_azan(next_prayer_name, time_to_azan)
 
-    updated_state = %{new_state |
-      azan_performed_at: DateTime.utc_now(),
-      azan_playing: false,
-      azan_process_pid: nil,
-      azan_timer_ref: nil
+    updated_state = %{
+      new_state
+      | azan_performed_at: DateTime.utc_now(),
+        azan_playing: false,
+        azan_process_pid: nil,
+        azan_timer_ref: nil
     }
 
     broadcast_state_update(updated_state)
@@ -136,14 +119,29 @@ defmodule Muadzin.Scheduler do
 
   @impl true
   def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref} = state) do
-    # Kill all audio processes (aplay, afplay, etc)
-    audio_cmd = Application.get_env(:muadzin, :audio_player_cmd)
-    if audio_cmd, do: System.cmd("pkill", ["-9", Path.basename(audio_cmd)])
+    debug_log("Stop azan called")
 
-    # Kill the spawned azan process if alive
-    if pid && Process.alive?(pid), do: Process.exit(pid, :kill)
+    # Send stop message to the spawned azan process
+    if pid && Process.alive?(pid) do
+      send(pid, :stop_audio)
+      debug_log("Sent :stop_audio to process #{inspect(pid)}")
+    end
 
-    # Cancel the fallback timer if exists
+    # Fallback: Kill all audio processes (aplay, afplay, etc) in case message doesn't work
+    Task.start(fn ->
+      Process.sleep(200) # Give Port.close() a chance to work first
+
+      audio_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+      if audio_cmd do
+        basename = Path.basename(audio_cmd)
+        case System.cmd("pkill", ["-9", basename]) do
+          {_, 0} -> debug_log("Fallback pkill succeeded")
+          _ -> :ok
+        end
+      end
+    end)
+
+    # Cancel the fallback timer
     if timer_ref, do: Process.cancel_timer(timer_ref)
 
     broadcast_azan_status(:stopped, nil)
@@ -178,6 +176,22 @@ defmodule Muadzin.Scheduler do
     )
   end
 
+  defp debug_log(message) do
+    Logger.info(message)
+    # Also broadcast to web UI for debugging
+    Phoenix.PubSub.broadcast(
+      Muadzin.PubSub,
+      "prayer_times",
+      {:debug_log, message}
+    )
+  end
+
+  def trigger_azan(server \\ __MODULE__) do
+    debug_log("Trigger azan called")
+    Process.send(server, :play_azan, [])
+    :ok
+  end
+
   @doc """
   Stop the currently playing azan
   """
@@ -191,6 +205,51 @@ defmodule Muadzin.Scheduler do
       System.cmd("amixer", ["cset", "numid=3", "1"])
       System.cmd("amixer", ["cset", "numid=1", "90%"])
     end
+  end
+
+  defp run_azan_sequence(prayer_name, scheduler_pid) do
+    case play_azan_interruptible(prayer_name, scheduler_pid) do
+      :ok -> play_dua_if_allowed(scheduler_pid)
+      :stopped -> debug_log("Azan stopped before completion")
+      result -> Logger.warning("Unexpected azan result: #{inspect(result)}")
+    end
+  end
+
+  defp play_dua_if_allowed(scheduler_pid) do
+    send(scheduler_pid, {:check_continue_azan, self()})
+
+    receive do
+      :continue ->
+        play_dua_interruptible(scheduler_pid)
+        send(scheduler_pid, :azan_finished)
+
+      :stop ->
+        debug_log("Skipping dua (stopped)")
+
+      :stop_audio ->
+        debug_log("Skipping dua (stopped)")
+    after
+      1000 ->
+        play_dua_interruptible(scheduler_pid)
+        send(scheduler_pid, :azan_finished)
+    end
+  end
+
+  defp play_azan_interruptible(:fajr, scheduler_pid) do
+    play_audio_interruptible("azan-fajr.wav", scheduler_pid)
+  end
+
+  defp play_azan_interruptible(prayer_name, _scheduler_pid) when prayer_name in [:sunrise, :sunset] do
+    Logger.info("Skipping azan for #{prayer_name}")
+    :ok
+  end
+
+  defp play_azan_interruptible(_prayer_name, scheduler_pid) do
+    play_audio_interruptible("azan.wav", scheduler_pid)
+  end
+
+  defp play_dua_interruptible(scheduler_pid) do
+    play_audio_interruptible("dua-after-the-azan.wav", scheduler_pid)
   end
 
   def play_azan(:fajr) do
@@ -209,6 +268,77 @@ defmodule Muadzin.Scheduler do
 
   def play_dua, do: play_audio("dua-after-the-azan.wav")
 
+  defp play_audio_interruptible(filename, _scheduler_pid) do
+    # Only play audio on target, not on host
+    if Application.get_env(:muadzin, :target) != :host do
+      path = Path.join(:code.priv_dir(:muadzin), filename)
+      audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+      audio_player_args = Application.get_env(:muadzin, :audio_player_args)
+
+      debug_log("Playing audio: #{filename}")
+
+      # Resolve executable path
+      case System.find_executable(audio_player_cmd) do
+        nil ->
+          Logger.error("Audio player executable not found: #{audio_player_cmd}")
+          :error
+
+        executable_path ->
+          # Use Port.open to spawn process that can be killed
+          port = Port.open({:spawn_executable, executable_path}, [
+            :binary,
+            :exit_status,
+            args: audio_player_args ++ [path]
+          ])
+
+          # Get the OS process ID for killing if needed
+          port_info = Port.info(port)
+          os_pid = Keyword.get(port_info, :os_pid)
+          debug_log("Port opened: #{inspect(port)}, OS PID: #{inspect(os_pid)}")
+
+          # Wait for audio to finish or receive stop message
+          result = receive do
+            {^port, {:exit_status, status}} ->
+              debug_log("Audio #{filename} finished with status: #{status}")
+              Port.close(port)
+              :ok
+
+            :stop_audio ->
+              debug_log("Stopping audio: #{filename}")
+
+              # Kill the OS process directly with SIGKILL
+              if os_pid do
+                debug_log("Killing OS process #{os_pid}")
+                System.cmd("kill", ["-9", "#{os_pid}"])
+              end
+
+              # Close the port
+              Port.close(port)
+
+              # Drain any remaining port messages
+              receive do
+                {^port, _} -> :ok
+              after
+                0 -> :ok
+              end
+
+              debug_log("Audio stopped successfully")
+              :stopped
+          after
+            600_000 -> # 10 minute timeout
+              Logger.warning("Audio playback timeout for #{filename}")
+              Port.close(port)
+              :timeout
+          end
+
+          result
+      end
+    else
+      Logger.info("Skipping audio playback on host: #{filename}")
+      :ok
+    end
+  end
+
   def play_audio(filename) do
     # Only play audio on target, not on host
     if Application.get_env(:muadzin, :target) != :host do
@@ -216,9 +346,38 @@ defmodule Muadzin.Scheduler do
       audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
       audio_player_args = Application.get_env(:muadzin, :audio_player_args)
 
-      System.cmd(audio_player_cmd, audio_player_args ++ [path])
+      Logger.debug("Playing audio: #{filename}")
+
+      # Resolve executable path (Port.open requires absolute path)
+      case System.find_executable(audio_player_cmd) do
+        nil ->
+          Logger.error("Audio player executable not found: #{audio_player_cmd}")
+          :error
+
+        executable_path ->
+          # Use Port.open to spawn process that can be killed
+          port = Port.open({:spawn_executable, executable_path}, [
+            :binary,
+            :exit_status,
+            args: audio_player_args ++ [path]
+          ])
+
+          # Wait for the audio to finish or process to be killed
+          receive do
+            {^port, {:exit_status, status}} ->
+              Port.close(port)
+              Logger.debug("Audio finished with status: #{status}")
+              :ok
+          after
+            600_000 -> # 10 minute timeout
+              Port.close(port)
+              Logger.warning("Audio playback timeout for #{filename}")
+              :timeout
+          end
+      end
     else
       Logger.info("Skipping audio playback on host: #{filename}")
+      :ok
     end
   end
 
@@ -239,7 +398,10 @@ defmodule Muadzin.Scheduler do
 
   def fetch_prayer_time(:tomorrow) do
     timezone = Settings.get_timezone()
-    date = DateTime.utc_now() |> Timex.Timezone.convert(timezone) |> DateTime.to_date() |> Date.add(1)
+
+    date =
+      DateTime.utc_now() |> Timex.Timezone.convert(timezone) |> DateTime.to_date() |> Date.add(1)
+
     generate_coordinate() |> PrayerTime.find(date, generate_params())
   end
 

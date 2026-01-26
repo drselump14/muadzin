@@ -79,4 +79,37 @@
       </div>
     <% end %>
   </div>
+
+  <!-- Debug Controls -->
+  <div class="mt-6 md:mt-8 flex gap-4">
+    <button
+      phx-click="trigger_azan"
+      class="bg-green-600 text-white border-2 border-green-400 rounded-lg px-4 py-2 text-base font-bold hover:bg-green-700"
+    >
+      Test Azan
+    </button>
+    <button
+      phx-click="clear_logs"
+      class="bg-neutral-700 text-white border-2 border-neutral-500 rounded-lg px-4 py-2 text-base font-bold hover:bg-neutral-800"
+    >
+      Clear Logs
+    </button>
+  </div>
+
+  <!-- Debug Logs Section -->
+  <div class="mt-6 md:mt-8 bg-black border-2 border-white rounded-xl p-4">
+    <h3 class="text-white text-lg font-bold mb-3">Debug Logs</h3>
+    <div class="bg-neutral-900 rounded-lg p-3 max-h-96 overflow-y-auto font-mono text-xs">
+      <%= if @debug_logs == [] do %>
+        <div class="text-neutral-500">No logs yet...</div>
+      <% else %>
+        <%= for log <- @debug_logs do %>
+          <div class="text-green-400 mb-1">
+            <span class="text-neutral-500"><%= Calendar.strftime(log.timestamp, "%H:%M:%S") %></span>
+            <span class="text-white ml-2"><%= log.message %></span>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
 </div>
