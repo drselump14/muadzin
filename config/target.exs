@@ -3,8 +3,15 @@ import Config
 # Use Ringlogger as the logger backend and remove :console.
 # See https://hexdocs.pm/ring_logger/readme.html for more information on
 # configuring ring_logger.
+#
+# Note: Logger backends are now configured in application.ex using LoggerBackends.add/1
 
-config :logger, backends: [RingLogger]
+# Configure RingLogger
+config :ring_logger,
+  max_size: 1024,  # Store last 1024 log messages
+  level: :debug,
+  format: "$time $metadata[$level] $message\n",
+  metadata: [:module, :function]
 
 # Use shoehorn to start the main application. See the shoehorn
 # library documentation for more control in ordering how OTP

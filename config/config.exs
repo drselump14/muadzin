@@ -34,7 +34,6 @@ config :logger, :logger_papertrail_backend,
   format: "$time $metadata[$level] $message"
 
 config :logger,
-  backends: [:console, LoggerPapertrailBackend.Logger],
   level: :debug
 
 # Configure Phoenix

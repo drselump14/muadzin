@@ -7,6 +7,9 @@ defmodule Muadzin.Application do
 
   @impl true
   def start(_type, _args) do
+    # Configure logger backends based on target
+    setup_logger_backends(target())
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Muadzin.Supervisor]
@@ -20,6 +23,23 @@ defmodule Muadzin.Application do
       ] ++ children(target())
 
     Supervisor.start_link(children, opts)
+  end
+
+  defp setup_logger_backends(:host) do
+    # On host, keep console logger and optionally add papertrail
+    if System.get_env("PAPERTRAIL_URL") do
+      LoggerBackends.add(LoggerPapertrailBackend.Logger)
+    end
+  end
+
+  defp setup_logger_backends(_target) do
+    # On target devices, use RingLogger for in-memory log buffer
+    LoggerBackends.add(RingLogger)
+
+    # Also add papertrail if configured
+    if System.get_env("PAPERTRAIL_URL") do
+      LoggerBackends.add(LoggerPapertrailBackend.Logger)
+    end
   end
 
   # List all child processes to be supervised

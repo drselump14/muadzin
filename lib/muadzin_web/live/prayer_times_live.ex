@@ -16,7 +16,7 @@ defmodule MuadzinWeb.PrayerTimesLive do
     socket =
       socket
       |> assign_state(state)
-      |> assign(azan_playing: state.azan_playing, current_azan_prayer: nil, debug_logs: [])
+      |> assign(azan_playing: state.azan_playing, current_azan_prayer: nil, debug_logs: [], show_debug: false)
 
     {:ok, socket}
   end
@@ -60,6 +60,11 @@ defmodule MuadzinWeb.PrayerTimesLive do
   @impl true
   def handle_event("clear_logs", _params, socket) do
     {:noreply, assign(socket, debug_logs: [])}
+  end
+
+  @impl true
+  def handle_event("toggle_debug", _params, socket) do
+    {:noreply, assign(socket, show_debug: !socket.assigns.show_debug)}
   end
 
   defp assign_state(socket, state) do

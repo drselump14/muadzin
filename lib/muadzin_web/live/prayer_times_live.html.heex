@@ -80,36 +80,55 @@
     <% end %>
   </div>
 
-  <!-- Debug Controls -->
-  <div class="mt-6 md:mt-8 flex gap-4">
+  <!-- Debug Toggle Button -->
+  <div class="mt-12 md:mt-16 flex justify-center">
     <button
-      phx-click="trigger_azan"
-      class="bg-green-600 text-white border-2 border-green-400 rounded-lg px-4 py-2 text-base font-bold hover:bg-green-700"
+      phx-click="toggle_debug"
+      class="bg-neutral-800 text-neutral-400 border-2 border-neutral-600 rounded-lg px-6 py-3 text-sm font-bold hover:bg-neutral-700 hover:text-white hover:border-neutral-500 transition-all"
     >
-      Test Azan
-    </button>
-    <button
-      phx-click="clear_logs"
-      class="bg-neutral-700 text-white border-2 border-neutral-500 rounded-lg px-4 py-2 text-base font-bold hover:bg-neutral-800"
-    >
-      Clear Logs
+      <%= if @show_debug do %>
+        🔧 Hide Debug Tools
+      <% else %>
+        🔧 Show Debug Tools
+      <% end %>
     </button>
   </div>
 
-  <!-- Debug Logs Section -->
-  <div class="mt-6 md:mt-8 bg-black border-2 border-white rounded-xl p-4">
-    <h3 class="text-white text-lg font-bold mb-3">Debug Logs</h3>
-    <div class="bg-neutral-900 rounded-lg p-3 max-h-96 overflow-y-auto font-mono text-xs">
-      <%= if @debug_logs == [] do %>
-        <div class="text-neutral-500">No logs yet...</div>
-      <% else %>
-        <%= for log <- @debug_logs do %>
-          <div class="text-green-400 mb-1">
-            <span class="text-neutral-500"><%= Calendar.strftime(log.timestamp, "%H:%M:%S") %></span>
-            <span class="text-white ml-2"><%= log.message %></span>
-          </div>
-        <% end %>
-      <% end %>
+  <!-- Debug Tools (Hidden by default) -->
+  <%= if @show_debug do %>
+    <div class="mt-6 md:mt-8 space-y-6">
+      <!-- Debug Controls -->
+      <div class="flex gap-4 justify-center">
+        <button
+          phx-click="trigger_azan"
+          class="bg-green-600 text-white border-2 border-green-400 rounded-lg px-4 py-2 text-base font-bold hover:bg-green-700 transition-all"
+        >
+          Test Azan
+        </button>
+        <button
+          phx-click="clear_logs"
+          class="bg-neutral-700 text-white border-2 border-neutral-500 rounded-lg px-4 py-2 text-base font-bold hover:bg-neutral-800 transition-all"
+        >
+          Clear Logs
+        </button>
+      </div>
+
+      <!-- Debug Logs Section -->
+      <div class="bg-black border-2 border-white rounded-xl p-4">
+        <h3 class="text-white text-lg font-bold mb-3">Debug Logs</h3>
+        <div class="bg-neutral-900 rounded-lg p-3 max-h-96 overflow-y-auto font-mono text-xs">
+          <%= if @debug_logs == [] do %>
+            <div class="text-neutral-500">No logs yet...</div>
+          <% else %>
+            <%= for log <- @debug_logs do %>
+              <div class="text-green-400 mb-1">
+                <span class="text-neutral-500"><%= Calendar.strftime(log.timestamp, "%H:%M:%S") %></span>
+                <span class="text-white ml-2"><%= log.message %></span>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
     </div>
-  </div>
+  <% end %>
 </div>

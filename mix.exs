@@ -57,6 +57,7 @@ defmodule Muadzin.MixProject do
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
       {:nerves_pack, "~> 0.7.0", targets: @all_targets},
+      {:logger_backends, "~> 1.0"},
       {:logger_papertrail_backend, "~> 1.0"},
 
       # Dependencies for specific targets
