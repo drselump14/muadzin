@@ -79,21 +79,13 @@ defmodule Muadzin.Scheduler do
 
     broadcast_azan_status(:stopped, nil)
 
-    new_state =
-      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
-      generate_state()
+    updated_state = reschedule_next_azan(%{
+      azan_performed_at: DateTime.utc_now(),
+      azan_playing: false,
+      azan_process_pid: nil,
+      azan_timer_ref: nil
+    })
 
-    schedule_azan(next_prayer_name, time_to_azan)
-
-    updated_state = %{
-      new_state
-      | azan_performed_at: DateTime.utc_now(),
-        azan_playing: false,
-        azan_process_pid: nil,
-        azan_timer_ref: nil
-    }
-
-    broadcast_state_update(updated_state)
     {:noreply, updated_state}
   end
 
@@ -108,12 +100,7 @@ defmodule Muadzin.Scheduler do
     Logger.info("Settings updated, recalculating prayer times")
 
     # Regenerate state with new location settings
-    new_state =
-      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
-      generate_state()
-
-    schedule_azan(next_prayer_name, time_to_azan)
-    broadcast_state_update(new_state)
+    new_state = reschedule_next_azan()
     {:noreply, new_state}
   end
 
@@ -145,7 +132,15 @@ defmodule Muadzin.Scheduler do
     if timer_ref, do: Process.cancel_timer(timer_ref)
 
     broadcast_azan_status(:stopped, nil)
-    {:noreply, %{state | azan_playing: false, azan_process_pid: nil, azan_timer_ref: nil}}
+
+    # Reschedule next azan since the stopped azan won't send :azan_finished
+    updated_state = reschedule_next_azan(%{
+      azan_playing: false,
+      azan_process_pid: nil,
+      azan_timer_ref: nil
+    })
+
+    {:noreply, updated_state}
   end
 
   @impl true
@@ -166,6 +161,22 @@ defmodule Muadzin.Scheduler do
       "prayer_times",
       {:prayer_times_updated, state}
     )
+  end
+
+  @doc """
+  Regenerate state, schedule next azan, and broadcast update.
+  Optionally merge additional fields into the new state.
+  """
+  defp reschedule_next_azan(additional_fields \\ %{}) do
+    new_state =
+      %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
+      generate_state()
+
+    schedule_azan(next_prayer_name, time_to_azan)
+
+    updated_state = Map.merge(new_state, additional_fields)
+    broadcast_state_update(updated_state)
+    updated_state
   end
 
   defp broadcast_azan_status(status, prayer_name) do
