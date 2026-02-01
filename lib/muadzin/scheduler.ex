@@ -22,6 +22,7 @@ defmodule Muadzin.Scheduler do
     field(:azan_playing, boolean(), default: false)
     field(:azan_process_pid, pid())
     field(:azan_timer_ref, reference())
+    field(:is_test_azan, boolean(), default: false)
   end
 
   def start_link(opts) do
@@ -54,7 +55,20 @@ defmodule Muadzin.Scheduler do
     azan_pid = spawn(fn -> run_azan_sequence(current_prayer_name, self()) end)
     timer_ref = Process.send_after(self(), :azan_finished, 5 * 60 * 1000)
 
-    {:noreply, %{state | azan_playing: true, azan_process_pid: azan_pid, azan_timer_ref: timer_ref}}
+    {:noreply, %{state | azan_playing: true, azan_process_pid: azan_pid, azan_timer_ref: timer_ref, is_test_azan: false}}
+  end
+
+  # Handle test azan trigger (manual trigger from API/UI)
+  @impl true
+  def handle_info(:play_test_azan, %__MODULE__{next_prayer_name: current_prayer_name} = state) do
+    debug_log("Playing TEST azan for #{current_prayer_name}")
+
+    broadcast_azan_status(:started, current_prayer_name)
+
+    azan_pid = spawn(fn -> run_azan_sequence(current_prayer_name, self()) end)
+    timer_ref = Process.send_after(self(), :azan_finished, 5 * 60 * 1000)
+
+    {:noreply, %{state | azan_playing: true, azan_process_pid: azan_pid, azan_timer_ref: timer_ref, is_test_azan: true}}
   end
 
   # Azan still playing - tell spawned process to continue with dua
@@ -73,19 +87,32 @@ defmodule Muadzin.Scheduler do
 
   # Handle azan finished when it's actually playing (normal completion)
   @impl true
-  def handle_info(:azan_finished, %{azan_playing: true, azan_timer_ref: timer_ref} = _state) do
+  def handle_info(:azan_finished, %{azan_playing: true, azan_timer_ref: timer_ref, is_test_azan: is_test} = state) do
     # Cancel the fallback timer if it exists
     if timer_ref, do: Process.cancel_timer(timer_ref)
 
     broadcast_azan_status(:stopped, nil)
 
-    updated_state = reschedule_next_azan(%{
-      azan_performed_at: DateTime.utc_now(),
-      azan_playing: false,
-      azan_process_pid: nil,
-      azan_timer_ref: nil
-    })
+    # If this was a test azan, don't reschedule - just reset state
+    updated_state = if is_test do
+      debug_log("Test azan finished - not rescheduling")
+      %{state |
+        azan_playing: false,
+        azan_process_pid: nil,
+        azan_timer_ref: nil,
+        is_test_azan: false
+      }
+    else
+      reschedule_next_azan(%{
+        azan_performed_at: DateTime.utc_now(),
+        azan_playing: false,
+        azan_process_pid: nil,
+        azan_timer_ref: nil,
+        is_test_azan: false
+      })
+    end
 
+    broadcast_state_update(updated_state)
     {:noreply, updated_state}
   end
 
@@ -105,7 +132,7 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref, next_prayer_name: stopped_prayer}) do
+  def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref, next_prayer_name: stopped_prayer, is_test_azan: is_test} = state) do
     debug_log("Stop azan called")
 
     # Send stop message to the spawned azan process
@@ -133,13 +160,26 @@ defmodule Muadzin.Scheduler do
 
     broadcast_azan_status(:stopped, nil)
 
-    # Schedule the prayer AFTER the one being stopped to avoid immediate replay
-    updated_state = reschedule_after_prayer(stopped_prayer, %{
-      azan_playing: false,
-      azan_process_pid: nil,
-      azan_timer_ref: nil
-    })
+    # If this was a test azan, don't reschedule - just reset state
+    updated_state = if is_test do
+      debug_log("Test azan stopped - not rescheduling")
+      %{state |
+        azan_playing: false,
+        azan_process_pid: nil,
+        azan_timer_ref: nil,
+        is_test_azan: false
+      }
+    else
+      # Schedule the prayer AFTER the one being stopped to avoid immediate replay
+      reschedule_after_prayer(stopped_prayer, %{
+        azan_playing: false,
+        azan_process_pid: nil,
+        azan_timer_ref: nil,
+        is_test_azan: false
+      })
+    end
 
+    broadcast_state_update(updated_state)
     {:noreply, updated_state}
   end
 
@@ -187,11 +227,18 @@ defmodule Muadzin.Scheduler do
 
   # Reschedule after stopping azan.
   # Always recalculate based on current time to avoid incorrectly advancing the current prayer.
-  defp reschedule_after_prayer(_stopped_prayer, additional_fields) do
+  defp reschedule_after_prayer(stopped_prayer, additional_fields) do
     # Recalculate everything based on current time instead of trying to skip prayers
     today_prayer_time = fetch_prayer_time(:today)
     next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(DateTime.utc_now())
     current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(DateTime.utc_now())
+
+    # If the next prayer is the same one we just stopped, skip to the next prayer in sequence
+    next_prayer_name = if next_prayer_name == stopped_prayer do
+      next_prayer_in_sequence(stopped_prayer)
+    else
+      next_prayer_name
+    end
 
     # Calculate time to the actual next prayer based on current time
     {next_prayer_name, time_to_azan, prayer_time} =
@@ -232,8 +279,8 @@ defmodule Muadzin.Scheduler do
   end
 
   def trigger_azan(server \\ __MODULE__) do
-    debug_log("Trigger azan called")
-    Process.send(server, :play_azan, [])
+    debug_log("Trigger TEST azan called (will not affect schedule)")
+    Process.send(server, :play_test_azan, [])
     :ok
   end
 
@@ -270,9 +317,11 @@ defmodule Muadzin.Scheduler do
 
       :stop ->
         debug_log("Skipping dua (stopped)")
+        send(scheduler_pid, :azan_finished)
 
       :stop_audio ->
         debug_log("Skipping dua (stopped)")
+        send(scheduler_pid, :azan_finished)
     after
       1000 ->
         play_dua_interruptible(scheduler_pid)
