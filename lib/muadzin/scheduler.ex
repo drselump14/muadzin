@@ -3,8 +3,8 @@ defmodule Muadzin.Scheduler do
   Documentation for Muadzin Prayer.
   """
 
-  alias Azan.PrayerTime
-  alias Muadzin.Settings
+  alias Azan.{CalculationMethod, Coordinate, PrayerTime}
+  alias Muadzin.{AudioPlayer, Settings}
 
   use GenServer
   use TypedStruct
@@ -131,7 +131,7 @@ defmodule Muadzin.Scheduler do
     debug_log("Stop azan called")
 
     # Simply tell AudioPlayer to stop - it will broadcast status which we'll handle
-    Muadzin.AudioPlayer.stop()
+    AudioPlayer.stop()
 
     {:noreply, state}
   end
@@ -203,7 +203,7 @@ defmodule Muadzin.Scheduler do
 
   # Play azan audio using the AudioPlayer GenServer
   defp play_azan_audio(:fajr) do
-    Muadzin.AudioPlayer.play("azan-fajr.wav")
+    AudioPlayer.play("azan-fajr.wav")
   end
 
   defp play_azan_audio(prayer_name) when prayer_name in [:sunrise, :sunset] do
@@ -211,15 +211,15 @@ defmodule Muadzin.Scheduler do
   end
 
   defp play_azan_audio(_prayer_name) do
-    Muadzin.AudioPlayer.play("azan.wav")
+    AudioPlayer.play("azan.wav")
   end
 
   def generate_coordinate() do
-    %Azan.Coordinate{latitude: Settings.get_latitude(), longitude: Settings.get_longitude()}
+    %Coordinate{latitude: Settings.get_latitude(), longitude: Settings.get_longitude()}
   end
 
   def generate_params() do
-    Azan.CalculationMethod.muslim_world_league()
+    CalculationMethod.muslim_world_league()
   end
 
   # @spec fetch_prayer_time(:today | :tomorrow) :: PrayerTime.t()
