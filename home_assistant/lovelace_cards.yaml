@@ -1,0 +1,409 @@
+# =============================================================================
+# PRAYER TIMES MUSHROOM CARDS - Copy and paste into your Lovelace dashboard
+# =============================================================================
+#
+# REQUIREMENTS:
+# 1. Install "Mushroom Cards" from HACS
+# 2. Install "Browser Mod" from HACS (for popup functionality)
+# 3. Make sure sensors are configured in packages/muadzin.yaml first
+#
+# =============================================================================
+
+# OPTION 1: Mushroom Card with Popup (RECOMMENDED) ⭐
+# =============================================================================
+# Shows prayer name with countdown, tap to see all prayers in a popup
+#
+type: custom:mushroom-template-card
+primary: "{{ states('sensor.next_prayer') | title }} - {{ (states('sensor.time_to_next_azan') | int / 60) | int }}:{{ '%02d' | format(states('sensor.time_to_next_azan') | int % 60) }}"
+secondary: ""
+icon: mdi:mosque
+icon_color: green
+badge_icon: "{{ 'mdi:volume-high' if is_state('binary_sensor.azan_is_playing', 'on') else 'mdi:clock-outline' }}"
+badge_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'blue' }}"
+tap_action:
+  action: fire-dom-event
+  browser_mod:
+    service: browser_mod.popup
+    data:
+      title: "Today's Prayer Times 🕌"
+      content:
+        type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ### Next: {{ states('sensor.next_prayer') | title }} in {{ (states('sensor.time_to_next_azan') | int / 60) | int }}:{{ '%02d' | format(states('sensor.time_to_next_azan') | int % 60) }}
+          - type: custom:mushroom-template-card
+            primary: "🌅 Fajr - {{ states('sensor.fajr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+            secondary: ""
+            icon: mdi:weather-sunset-up
+            icon_color: orange
+          - type: custom:mushroom-template-card
+            primary: "🌞 Dhuhr - {{ states('sensor.dhuhr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+            secondary: ""
+            icon: mdi:white-balance-sunny
+            icon_color: yellow
+          - type: custom:mushroom-template-card
+            primary: "🌤️ Asr - {{ states('sensor.asr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+            secondary: ""
+            icon: mdi:weather-partly-cloudy
+            icon_color: amber
+          - type: custom:mushroom-template-card
+            primary: "🌇 Maghrib - {{ states('sensor.maghrib_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+            secondary: ""
+            icon: mdi:weather-sunset-down
+            icon_color: deep-orange
+          - type: custom:mushroom-template-card
+            primary: "🌙 Isha - {{ states('sensor.isha_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+            secondary: ""
+            icon: mdi:weather-night
+            icon_color: indigo
+          - type: custom:mushroom-template-card
+            primary: Azan Status
+            secondary: "{{ 'Playing' if is_state('binary_sensor.azan_is_playing', 'on') else 'Stopped' }}"
+            icon: mdi:volume-high
+            icon_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'grey' }}"
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Stop Azan
+                icon: mdi:stop-circle
+                tap_action:
+                  action: call-service
+                  service: rest_command.muadzin_stop_azan
+              - type: button
+                name: Test Azan
+                icon: mdi:play-circle
+                tap_action:
+                  action: call-service
+                  service: rest_command.muadzin_trigger_azan
+# =============================================================================
+# OPTION 2: Expandable Mushroom Card (No popup required)
+# =============================================================================
+# Shows next prayer, expands to show all prayers when tapped
+#
+# type: custom:mushroom-title-card
+# title: 🕌 Prayer Times
+# ---
+# type: vertical-stack
+# cards:
+#   - type: custom:mushroom-entity-card
+#     entity: sensor.next_prayer
+#     name: Next Prayer
+#     icon: mdi:mosque
+#     icon_color: green
+#     tap_action:
+#       action: more-info
+#
+#   - type: custom:mushroom-chips-card
+#     chips:
+#       - type: template
+#         icon: mdi:clock-outline
+#         content: "In {{ states('sensor.time_to_next_azan') }} min"
+#         icon_color: blue
+#
+#   - type: conditional
+#     conditions:
+#       - entity: binary_sensor.azan_is_playing
+#         state: "on"
+#     card:
+#       type: custom:mushroom-chips-card
+#       chips:
+#         - type: template
+#           icon: mdi:volume-high
+#           content: "Azan Playing"
+#           icon_color: red
+#
+#   # All Prayer Times (always visible)
+#   - type: custom:mushroom-title-card
+#     subtitle: Today's Prayer Times
+#
+#   - type: grid
+#     columns: 2
+#     square: false
+#     cards:
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.fajr_prayer_time
+#         name: Fajr
+#         icon: mdi:weather-sunset-up
+#         icon_color: orange
+#         primary_info: name
+#         secondary_info: state
+#
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.dhuhr_prayer_time
+#         name: Dhuhr
+#         icon: mdi:white-balance-sunny
+#         icon_color: yellow
+#         primary_info: name
+#         secondary_info: state
+#
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.asr_prayer_time
+#         name: Asr
+#         icon: mdi:weather-partly-cloudy
+#         icon_color: amber
+#         primary_info: name
+#         secondary_info: state
+#
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.maghrib_prayer_time
+#         name: Maghrib
+#         icon: mdi:weather-sunset-down
+#         icon_color: deep-orange
+#         primary_info: name
+#         secondary_info: state
+#
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.isha_prayer_time
+#         name: Isha
+#         icon: mdi:weather-night
+#         icon_color: indigo
+#         primary_info: name
+#         secondary_info: state
+#
+#       - type: custom:mushroom-entity-card
+#         entity: sensor.time_to_next_azan
+#         name: Time to Next
+#         icon: mdi:clock-outline
+#         icon_color: blue
+#         primary_info: name
+#         secondary_info: state
+#
+#   # Control Buttons
+#   - type: horizontal-stack
+#     cards:
+#       - type: custom:mushroom-template-card
+#         primary: Stop Azan
+#         icon: mdi:stop-circle
+#         icon_color: red
+#         tap_action:
+#           action: call-service
+#           service: rest_command.muadzin_stop_azan
+#
+#       - type: custom:mushroom-template-card
+#         primary: Test Azan
+#         icon: mdi:play-circle
+#         icon_color: green
+#         tap_action:
+#           action: call-service
+#           service: rest_command.muadzin_trigger_azan
+
+# =============================================================================
+# OPTION 3: Compact Mushroom Chips Card
+# =============================================================================
+# Minimalist chips showing next prayer and countdown
+#
+# type: custom:mushroom-chips-card
+# alignment: center
+# chips:
+#   - type: entity
+#     entity: sensor.next_prayer
+#     icon: mdi:mosque
+#     content_info: name
+#     tap_action:
+#       action: fire-dom-event
+#       browser_mod:
+#         service: browser_mod.popup
+#         data:
+#           title: "Prayer Times"
+#           content:
+#             type: entities
+#             entities:
+#               - sensor.fajr_prayer_time
+#               - sensor.dhuhr_prayer_time
+#               - sensor.asr_prayer_time
+#               - sensor.maghrib_prayer_time
+#               - sensor.isha_prayer_time
+#
+#   - type: template
+#     icon: mdi:clock-outline
+#     content: "{{ states('sensor.time_to_next_azan') }}m"
+#     icon_color: blue
+#
+#   - type: conditional
+#     conditions:
+#       - entity: binary_sensor.azan_is_playing
+#         state: "on"
+#     chip:
+#       type: template
+#       icon: mdi:volume-high
+#       content: Playing
+#       icon_color: red
+#       tap_action:
+#         action: call-service
+#         service: rest_command.muadzin_stop_azan
+
+# =============================================================================
+# OPTION 4: Full Dashboard with All Prayers Visible
+# =============================================================================
+# Complete view showing everything at once
+#
+# type: vertical-stack
+# cards:
+#   # Header
+#   - type: custom:mushroom-title-card
+#     title: 🕌 Prayer Times
+#     subtitle: "Next: {{ states('sensor.next_prayer') | title }} in {{ states('sensor.time_to_next_azan') }} minutes"
+#
+#   # Status Chips
+#   - type: custom:mushroom-chips-card
+#     alignment: center
+#     chips:
+#       - type: entity
+#         entity: sensor.next_prayer
+#         icon: mdi:mosque
+#         icon_color: green
+#       - type: entity
+#         entity: sensor.time_to_next_azan
+#         icon: mdi:timer-outline
+#         icon_color: blue
+#       - type: entity
+#         entity: binary_sensor.azan_is_playing
+#         icon: mdi:volume-high
+#
+#   # Prayer Times Grid
+#   - type: grid
+#     columns: 2
+#     square: false
+#     cards:
+#       - type: custom:mushroom-template-card
+#         primary: Fajr
+#         secondary: "{{ states('sensor.fajr_prayer_time') | as_timestamp | timestamp_custom('%I:%M %p', true) }}"
+#         icon: mdi:weather-sunset-up
+#         icon_color: orange
+#         badge_icon: "{{ '✓' if is_state('sensor.current_prayer', 'fajr') else '' }}"
+#         badge_color: green
+#
+#       - type: custom:mushroom-template-card
+#         primary: Dhuhr
+#         secondary: "{{ states('sensor.dhuhr_prayer_time') | as_timestamp | timestamp_custom('%I:%M %p', true) }}"
+#         icon: mdi:white-balance-sunny
+#         icon_color: yellow
+#         badge_icon: "{{ '✓' if is_state('sensor.current_prayer', 'dhuhr') else '' }}"
+#         badge_color: green
+#
+#       - type: custom:mushroom-template-card
+#         primary: Asr
+#         secondary: "{{ states('sensor.asr_prayer_time') | as_timestamp | timestamp_custom('%I:%M %p', true) }}"
+#         icon: mdi:weather-partly-cloudy
+#         icon_color: amber
+#         badge_icon: "{{ '✓' if is_state('sensor.current_prayer', 'asr') else '' }}"
+#         badge_color: green
+#
+#       - type: custom:mushroom-template-card
+#         primary: Maghrib
+#         secondary: "{{ states('sensor.maghrib_prayer_time') | as_timestamp | timestamp_custom('%I:%M %p', true) }}"
+#         icon: mdi:weather-sunset-down
+#         icon_color: deep-orange
+#         badge_icon: "{{ '✓' if is_state('sensor.current_prayer', 'maghrib') else '' }}"
+#         badge_color: green
+#
+#       - type: custom:mushroom-template-card
+#         primary: Isha
+#         secondary: "{{ states('sensor.isha_prayer_time') | as_timestamp | timestamp_custom('%I:%M %p', true) }}"
+#         icon: mdi:weather-night
+#         icon_color: indigo
+#         badge_icon: "{{ '✓' if is_state('sensor.current_prayer', 'isha') else '' }}"
+#         badge_color: green
+#
+#   # Control Buttons
+#   - type: horizontal-stack
+#     cards:
+#       - type: custom:mushroom-template-card
+#         primary: Stop Azan
+#         icon: mdi:stop-circle
+#         icon_color: red
+#         layout: vertical
+#         tap_action:
+#           action: call-service
+#           service: rest_command.muadzin_stop_azan
+#
+#       - type: custom:mushroom-template-card
+#         primary: Test Azan
+#         icon: mdi:play-circle
+#         icon_color: green
+#         layout: vertical
+#         tap_action:
+#           action: call-service
+#           service: rest_command.muadzin_trigger_azan
+
+# =============================================================================
+# OPTION 5: Single Mushroom Template Card (Most Compact)
+# =============================================================================
+# Shows next prayer with all info, tap to see popup
+#
+# type: custom:mushroom-template-card
+# primary: "{{ states('sensor.next_prayer') | title }} Prayer"
+# secondary: "In {{ states('sensor.time_to_next_azan') }} minutes"
+# icon: mdi:mosque
+# icon_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'green' }}"
+# badge_icon: "{{ 'mdi:volume-high' if is_state('binary_sensor.azan_is_playing', 'on') else 'mdi:clock-outline' }}"
+# badge_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'blue' }}"
+# tap_action:
+#   action: fire-dom-event
+#   browser_mod:
+#     service: browser_mod.popup
+#     data:
+#       title: "Today's Prayer Times"
+#       content:
+#         type: grid
+#         columns: 1
+#         cards:
+#           - type: custom:mushroom-entity-card
+#             entity: sensor.fajr_prayer_time
+#             name: 🌅 Fajr
+#             icon_color: orange
+#           - type: custom:mushroom-entity-card
+#             entity: sensor.dhuhr_prayer_time
+#             name: 🌞 Dhuhr
+#             icon_color: yellow
+#           - type: custom:mushroom-entity-card
+#             entity: sensor.asr_prayer_time
+#             name: 🌤️ Asr
+#             icon_color: amber
+#           - type: custom:mushroom-entity-card
+#             entity: sensor.maghrib_prayer_time
+#             name: 🌇 Maghrib
+#             icon_color: deep-orange
+#           - type: custom:mushroom-entity-card
+#             entity: sensor.isha_prayer_time
+#             name: 🌙 Isha
+#             icon_color: indigo
+
+# =============================================================================
+# INSTALLATION INSTRUCTIONS
+# =============================================================================
+#
+# 1. Install required custom cards from HACS:
+#    - Mushroom Cards (required)
+#    - Browser Mod (required for popup functionality)
+#
+# 2. Copy one of the card configurations above
+#
+# 3. Go to your Home Assistant dashboard
+#
+# 4. Click the three dots (⋮) in the top right
+#
+# 5. Click "Edit Dashboard"
+#
+# 6. Click "+ ADD CARD"
+#
+# 7. Scroll to bottom and click "Manual"
+#
+# 8. Paste the card configuration
+#
+# 9. Click "Save"
+#
+# =============================================================================
+# TIPS
+# =============================================================================
+#
+# - Option 1 is recommended for most users (popup on tap)
+# - Option 2 shows all prayers without needing a popup
+# - Option 3 is the most compact (chips only)
+# - Option 4 is the most detailed (all info visible)
+# - Option 5 is a single card with popup
+#
+# All options use Mushroom cards for a modern, clean look!
+#
+# =============================================================================

@@ -87,7 +87,7 @@ config :mdns_lite,
   # because otherwise any of the devices may respond to nerves.local leading to
   # unpredictable behavior.
 
-  hosts: [:hostname, "nerves"],
+  hosts: [:hostname, "muadzin"],
   ttl: 120,
 
   # Advertise the following services over mDNS.
@@ -118,7 +118,7 @@ config(:tzdata, :data_dir, "/data/tzdata")
 
 # Configure Phoenix endpoint for Nerves target
 config :muadzin, MuadzinWeb.Endpoint,
-  url: [host: "nerves.local", port: 80, scheme: "http"],
+  url: [host: "muadzin.local", port: 80, scheme: "http"],
   http: [ip: {0, 0, 0, 0}, port: 80],
   server: true,
   check_origin: false,

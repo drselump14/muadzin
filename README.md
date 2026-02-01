@@ -1,6 +1,23 @@
 # Muadzin
 
-**TODO: Add description**
+An Islamic prayer times scheduler and azan player for Nerves-based embedded devices (Raspberry Pi, etc.). Features a Phoenix web interface for monitoring and configuration.
+
+## Features
+
+- Automatic prayer time calculation based on location and timezone
+- Plays azan (call to prayer) at scheduled times
+- Web interface for monitoring and settings
+- REST API for integration with Home Assistant and other systems
+- Real-time updates via LiveView
+- Supports multiple hardware platforms (Raspberry Pi, BeagleBone, etc.)
+
+## Home Assistant Integration
+
+See the [`home_assistant/`](home_assistant/) folder for complete integration instructions, including:
+- Sensor configuration for prayer times
+- Tappable dashboard cards
+- Automation examples
+- Control buttons for azan playback
 
 ## Targets
 

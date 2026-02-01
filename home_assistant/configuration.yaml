@@ -1,0 +1,431 @@
+# =============================================================================
+# Home Assistant Configuration for Muadzin Prayer Times
+# =============================================================================
+#
+# This file contains all the sensors, buttons, and automations needed to
+# integrate Muadzin with Home Assistant.
+#
+# INSTALLATION:
+# Add this to your configuration.yaml or include it as a package.
+# See README.md in this folder for detailed setup instructions.
+#
+# =============================================================================
+
+# =============================================================================
+# REST API Integration
+# =============================================================================
+# Replace 'muadzin.local' with your device's IP address or hostname
+
+rest:
+  - resource: http://muadzin.local/api/prayers
+    scan_interval: 60 # Update every 60 seconds
+    sensor:
+      - name: "Prayer Times"
+        unique_id: muadzin_prayer_times
+        value_template: "{{ value_json.next_prayer_name }}"
+        json_attributes:
+          - prayers
+          - next_prayer_name
+          - current_prayer_name
+          - time_to_next_azan_minutes
+          - azan_playing
+
+# =============================================================================
+# Template Sensors
+# =============================================================================
+template:
+  - sensor:
+      # Next prayer name
+      - name: "Next Prayer"
+        unique_id: muadzin_next_prayer
+        state: "{{ state_attr('sensor.prayer_times', 'next_prayer_name') }}"
+        icon: mdi:mosque
+
+      # Current prayer name
+      - name: "Current Prayer"
+        unique_id: muadzin_current_prayer
+        state: "{{ state_attr('sensor.prayer_times', 'current_prayer_name') }}"
+        icon: mdi:book-open-variant
+
+      # Time to next azan in minutes
+      - name: "Time to Next Azan"
+        unique_id: muadzin_time_to_azan
+        state: "{{ state_attr('sensor.prayer_times', 'time_to_next_azan_minutes') }}"
+        unit_of_measurement: "minutes"
+        icon: mdi:clock-outline
+
+      # Azan playing status
+      - name: "Azan Playing"
+        unique_id: muadzin_azan_playing
+        state: "{{ state_attr('sensor.prayer_times', 'azan_playing') }}"
+        icon: mdi:volume-high
+
+      # Fajr prayer time
+      - name: "Fajr Prayer Time"
+        unique_id: muadzin_fajr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set fajr = prayers | selectattr('name', 'equalto', 'fajr') | first %}
+            {{ fajr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-sunset-up
+
+      # Dhuhr prayer time
+      - name: "Dhuhr Prayer Time"
+        unique_id: muadzin_dhuhr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set dhuhr = prayers | selectattr('name', 'equalto', 'dhuhr') | first %}
+            {{ dhuhr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:white-balance-sunny
+
+      # Asr prayer time
+      - name: "Asr Prayer Time"
+        unique_id: muadzin_asr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set asr = prayers | selectattr('name', 'equalto', 'asr') | first %}
+            {{ asr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-partly-cloudy
+
+      # Maghrib prayer time
+      - name: "Maghrib Prayer Time"
+        unique_id: muadzin_maghrib_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set maghrib = prayers | selectattr('name', 'equalto', 'maghrib') | first %}
+            {{ maghrib.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-sunset-down
+
+      # Isha prayer time
+      - name: "Isha Prayer Time"
+        unique_id: muadzin_isha_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set isha = prayers | selectattr('name', 'equalto', 'isha') | first %}
+            {{ isha.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-night
+
+  # Binary sensors
+  - binary_sensor:
+      - name: "Azan is Playing"
+        unique_id: muadzin_azan_is_playing
+        state: "{{ state_attr('sensor.prayer_times', 'azan_playing') == true }}"
+        device_class: sound
+
+# =============================================================================
+# Buttons and Switches
+# =============================================================================
+rest_command:
+  # Stop the azan
+  muadzin_stop_azan:
+    url: http://muadzin.local/api/azan/stop
+    method: POST
+    content_type: "application/json"
+
+  # Trigger the azan manually
+  muadzin_trigger_azan:
+    url: http://muadzin.local/api/azan/trigger
+    method: POST
+    content_type: "application/json"
+
+button:
+  - platform: template
+    buttons:
+      stop_azan:
+        friendly_name: "Stop Azan"
+        unique_id: muadzin_stop_azan_button
+        icon_template: mdi:stop-circle
+        press:
+          - service: rest_command.muadzin_stop_azan
+
+      trigger_azan:
+        friendly_name: "Trigger Azan"
+        unique_id: muadzin_trigger_azan_button
+        icon_template: mdi:play-circle
+        press:
+          - service: rest_command.muadzin_trigger_azan
+
+# =============================================================================
+# Example Automations
+# =============================================================================
+automation:
+  # Notify 5 minutes before prayer time
+  - id: prayer_time_reminder
+    alias: "Prayer Time Reminder"
+    trigger:
+      - platform: template
+        value_template: "{{ states('sensor.time_to_next_azan') | int == 5 }}"
+    action:
+      - service: notify.notify
+        data:
+          title: "Prayer Time Soon"
+          message: >
+            {{ states('sensor.next_prayer') | title }} prayer in 5 minutes
+
+  # Notify when azan starts playing
+  - id: azan_started
+    alias: "Azan Started Playing"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.azan_is_playing
+        to: "on"
+    action:
+      - service: notify.notify
+        data:
+          title: "Azan"
+          message: >
+            {{ states('sensor.current_prayer') | title }} azan is now playing
+
+  # Turn off music/media when azan plays
+  - id: pause_media_during_azan
+    alias: "Pause Media During Azan"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.azan_is_playing
+        to: "on"
+    action:
+      - service: media_player.media_pause
+        target:
+          entity_id: media_player.living_room # Change to your media player
+
+  # Daily prayer times notification
+  - id: daily_prayer_times
+    alias: "Daily Prayer Times Summary"
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    action:
+      - service: notify.notify
+        data:
+          title: "Today's Prayer Times"
+          message: >
+            Fajr: {{ states('sensor.fajr_prayer_time') | as_timestamp | timestamp_custom('%H:%M') }}
+            Dhuhr: {{ states('sensor.dhuhr_prayer_time') | as_timestamp | timestamp_custom('%H:%M') }}
+            Asr: {{ states('sensor.asr_prayer_time') | as_timestamp | timestamp_custom('%H:%M') }}
+            Maghrib: {{ states('sensor.maghrib_prayer_time') | as_timestamp | timestamp_custom('%H:%M') }}
+            Isha: {{ states('sensor.isha_prayer_time') | as_timestamp | timestamp_custom('%H:%M') }}
+
+# =============================================================================
+# Lovelace Dashboard Cards
+# =============================================================================
+
+# OPTION 1: Simple Entity Card with More Info Dialog (Native HA)
+# =============================================================================
+# When you tap the entity, it opens the more-info dialog showing all attributes
+# Add this to your dashboard:
+#
+# type: entities
+# title: Prayer Times
+# entities:
+#   - entity: sensor.next_prayer
+#     name: Next Prayer
+#     secondary_info: last-changed
+#     tap_action:
+#       action: more-info
+# show_header_toggle: false
+#
+# To customize what shows in the more-info dialog, add this to configuration.yaml:
+# customize:
+#   sensor.prayer_times:
+#     friendly_name: "Today's Prayer Times"
+
+# OPTION 2: Custom Button Card with Popup (Requires custom:button-card from HACS)
+# =============================================================================
+# This creates a nice card that shows a popup with all prayer times when tapped
+#
+# type: custom:button-card
+# entity: sensor.next_prayer
+# name: |
+#   [[[ return `${states['sensor.next_prayer'].state.charAt(0).toUpperCase() + states['sensor.next_prayer'].state.slice(1)} in ${states['sensor.time_to_next_azan'].state} min` ]]]
+# icon: mdi:mosque
+# show_state: false
+# styles:
+#   card:
+#     - height: 100px
+#   name:
+#     - font-size: 16px
+#     - font-weight: bold
+# tap_action:
+#   action: fire-dom-event
+#   browser_mod:
+#     service: browser_mod.popup
+#     data:
+#       title: "Today's Prayer Times"
+#       content:
+#         type: entities
+#         entities:
+#           - entity: sensor.fajr_prayer_time
+#             name: Fajr
+#           - entity: sensor.dhuhr_prayer_time
+#             name: Dhuhr
+#           - entity: sensor.asr_prayer_time
+#             name: Asr
+#           - entity: sensor.maghrib_prayer_time
+#             name: Maghrib
+#           - entity: sensor.isha_prayer_time
+#             name: Isha
+#           - type: divider
+#           - entity: sensor.time_to_next_azan
+#             name: Time to Next Prayer
+#             suffix: minutes
+#           - entity: binary_sensor.azan_is_playing
+#             name: Azan Playing
+
+# OPTION 3: Markdown Card with Auto-updating Prayer Times (RECOMMENDED)
+# =============================================================================
+# This shows all prayer times in a clean card that updates automatically
+#
+# type: markdown
+# title: 🕌 Prayer Times
+# content: |
+#   ### Next Prayer: {{ states('sensor.next_prayer') | title }}
+#   ⏱️ In {{ states('sensor.time_to_next_azan') }} minutes
+#
+#   ---
+#
+#   | Prayer | Time |
+#   |--------|------|
+#   | 🌅 Fajr | {{ states('sensor.fajr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }} |
+#   | ☀️ Sunrise | - |
+#   | 🌞 Dhuhr | {{ states('sensor.dhuhr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }} |
+#   | 🌤️ Asr | {{ states('sensor.asr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }} |
+#   | 🌇 Maghrib | {{ states('sensor.maghrib_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }} |
+#   | 🌙 Isha | {{ states('sensor.isha_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }} |
+#
+#   {% if is_state('binary_sensor.azan_is_playing', 'on') %}
+#   🔊 **Azan is currently playing**
+#   {% endif %}
+
+# OPTION 4: Complete Dashboard with Tap Action (BEST FOR YOUR USE CASE)
+# =============================================================================
+# This creates a main card that shows next prayer, and when tapped,
+# shows a popup with all prayer times
+#
+type: vertical-stack
+cards:
+  # Main Prayer Times Card
+  - type: custom:mushroom-entity-card
+    entity: sensor.next_prayer
+    name: Next Prayer
+    icon: mdi:mosque
+    primary_info: name
+    secondary_info: state
+    badge_color: green
+    badge_icon: mdi:clock-outline
+    tap_action:
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        data:
+          title: "Today's Prayer Times 🕌"
+          content:
+            type: vertical-stack
+            cards:
+              - type: markdown
+                content: |
+                  ### Next: {{ states('sensor.next_prayer') | title }} in {{ states('sensor.time_to_next_azan') }} minutes
+              - type: entities
+                entities:
+                  - entity: sensor.fajr_prayer_time
+                    name: 🌅 Fajr
+                  - entity: sensor.dhuhr_prayer_time
+                    name: 🌞 Dhuhr
+                  - entity: sensor.asr_prayer_time
+                    name: 🌤️ Asr
+                  - entity: sensor.maghrib_prayer_time
+                    name: 🌇 Maghrib
+                  - entity: sensor.isha_prayer_time
+                    name: 🌙 Isha
+                  - type: divider
+                  - entity: binary_sensor.azan_is_playing
+                    name: Azan Status
+              - type: horizontal-stack
+                cards:
+                  - type: button
+                    name: Stop Azan
+                    icon: mdi:stop-circle
+                    tap_action:
+                      action: call-service
+                      service: rest_command.muadzin_stop_azan
+                  - type: button
+                    name: Test Azan
+                    icon: mdi:play-circle
+                    tap_action:
+                      action: call-service
+                      service: rest_command.muadzin_trigger_azan
+# OPTION 5: Simple Native Solution (NO CUSTOM CARDS NEEDED) ⭐ EASIEST
+# =============================================================================
+# This uses only native Home Assistant cards
+# Tap the entity to see all prayer times in a vertical stack
+#
+# type: vertical-stack
+# cards:
+#   - type: glance
+#     entities:
+#       - entity: sensor.next_prayer
+#         name: Next Prayer
+#         icon: mdi:mosque
+#     show_name: true
+#     show_state: true
+#     tap_action:
+#       action: navigate
+#       navigation_path: /lovelace/prayer-times
+#
+#   - type: conditional
+#     conditions:
+#       - entity: binary_sensor.azan_is_playing
+#         state: "on"
+#     card:
+#       type: markdown
+#       content: |
+#         🔊 **Azan is currently playing**
+#
+# Then create a new view/tab called "prayer-times" with this card:
+#
+# - title: Prayer Times
+#   path: prayer-times
+#   cards:
+#     - type: entities
+#       title: Today's Prayer Times
+#       entities:
+#         - entity: sensor.fajr_prayer_time
+#           name: 🌅 Fajr
+#         - entity: sensor.dhuhr_prayer_time
+#           name: 🌞 Dhuhr
+#         - entity: sensor.asr_prayer_time
+#           name: 🌤️ Asr
+#         - entity: sensor.maghrib_prayer_time
+#           name: 🌇 Maghrib
+#         - entity: sensor.isha_prayer_time
+#           name: 🌙 Isha
+#         - type: divider
+#         - entity: sensor.next_prayer
+#           name: Next Prayer
+#         - entity: sensor.time_to_next_azan
+#           name: Time Remaining
+#         - entity: binary_sensor.azan_is_playing
+#           name: Azan Playing
+#     - type: horizontal-stack
+#       cards:
+#         - type: button
+#           name: Stop Azan
+#           icon: mdi:stop-circle
+#           tap_action:
+#             action: call-service
+#             service: rest_command.muadzin_stop_azan
+#         - type: button
+#           name: Test Azan
+#           icon: mdi:play-circle
+#           tap_action:
+#             action: call-service
+#             service: rest_command.muadzin_trigger_azan

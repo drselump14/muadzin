@@ -26,5 +26,7 @@ defmodule MuadzinWeb.Router do
 
     get "/next-prayer", PrayerController, :next_prayer
     get "/prayers", PrayerController, :all_prayers
+    post "/azan/stop", PrayerController, :stop_azan
+    post "/azan/trigger", PrayerController, :trigger_azan
   end
 end

@@ -1,0 +1,91 @@
+# =============================================================================
+# Add this at the VERY TOP of your dashboard YAML file
+# =============================================================================
+
+decluttering_templates:
+  muadzin_prayer_card:
+    card:
+      type: custom:mushroom-template-card
+      primary: "{{ states('sensor.next_prayer') | title }} - {{ (states('sensor.time_to_next_azan') | int / 60) | int }}:{{ '%02d' | format(states('sensor.time_to_next_azan') | int % 60) }}"
+      secondary: ""
+      icon: mdi:mosque
+      icon_color: green
+      badge_icon: "{{ 'mdi:volume-high' if is_state('binary_sensor.azan_is_playing', 'on') else 'mdi:clock-outline' }}"
+      badge_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'blue' }}"
+      tap_action:
+        action: fire-dom-event
+        browser_mod:
+          service: browser_mod.popup
+          data:
+            title: "Today's Prayer Times 🕌"
+            content:
+              type: vertical-stack
+              cards:
+                - type: markdown
+                  content: |
+                    ### Next: {{ states('sensor.next_prayer') | title }} in {{ (states('sensor.time_to_next_azan') | int / 60) | int }}:{{ '%02d' | format(states('sensor.time_to_next_azan') | int % 60) }}
+                - type: custom:mushroom-template-card
+                  primary: "🌅 Fajr - {{ states('sensor.fajr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+                  secondary: ""
+                  icon: mdi:weather-sunset-up
+                  icon_color: orange
+                - type: custom:mushroom-template-card
+                  primary: "🌞 Dhuhr - {{ states('sensor.dhuhr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+                  secondary: ""
+                  icon: mdi:white-balance-sunny
+                  icon_color: yellow
+                - type: custom:mushroom-template-card
+                  primary: "🌤️ Asr - {{ states('sensor.asr_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+                  secondary: ""
+                  icon: mdi:weather-partly-cloudy
+                  icon_color: amber
+                - type: custom:mushroom-template-card
+                  primary: "🌇 Maghrib - {{ states('sensor.maghrib_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+                  secondary: ""
+                  icon: mdi:weather-sunset-down
+                  icon_color: deep-orange
+                - type: custom:mushroom-template-card
+                  primary: "🌙 Isha - {{ states('sensor.isha_prayer_time') | as_timestamp | timestamp_custom('%H:%M', true) }}"
+                  secondary: ""
+                  icon: mdi:weather-night
+                  icon_color: indigo
+                - type: custom:mushroom-template-card
+                  primary: Azan Status
+                  secondary: "{{ 'Playing' if is_state('binary_sensor.azan_is_playing', 'on') else 'Stopped' }}"
+                  icon: mdi:volume-high
+                  icon_color: "{{ 'red' if is_state('binary_sensor.azan_is_playing', 'on') else 'grey' }}"
+                - type: horizontal-stack
+                  cards:
+                    - type: button
+                      name: Stop Azan
+                      icon: mdi:stop-circle
+                      tap_action:
+                        action: call-service
+                        service: rest_command.muadzin_stop_azan
+                    - type: button
+                      name: Test Azan
+                      icon: mdi:play-circle
+                      tap_action:
+                        action: call-service
+                        service: rest_command.muadzin_trigger_azan
+
+# =============================================================================
+# Then your existing dashboard configuration starts here:
+# =============================================================================
+
+type: sections
+path: home
+title: Home
+icon: mdi:home-floor-1
+# ... rest of your dashboard
+
+# =============================================================================
+# THEN, replace the large prayer card in your sections with just this:
+# =============================================================================
+
+# Find this section in your dashboard (near the bottom):
+# sections:
+#   - type: grid
+#     cards:
+#       - type: custom:decluttering-card
+#         template: muadzin_prayer_card

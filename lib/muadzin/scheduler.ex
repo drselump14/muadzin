@@ -105,7 +105,7 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref} = state) do
+  def handle_cast(:stop_azan, %{azan_process_pid: pid, azan_timer_ref: timer_ref, next_prayer_name: stopped_prayer}) do
     debug_log("Stop azan called")
 
     # Send stop message to the spawned azan process
@@ -133,8 +133,8 @@ defmodule Muadzin.Scheduler do
 
     broadcast_azan_status(:stopped, nil)
 
-    # Reschedule next azan since the stopped azan won't send :azan_finished
-    updated_state = reschedule_next_azan(%{
+    # Schedule the prayer AFTER the one being stopped to avoid immediate replay
+    updated_state = reschedule_after_prayer(stopped_prayer, %{
       azan_playing: false,
       azan_process_pid: nil,
       azan_timer_ref: nil
@@ -163,14 +163,48 @@ defmodule Muadzin.Scheduler do
     )
   end
 
-  @doc """
-  Regenerate state, schedule next azan, and broadcast update.
-  Optionally merge additional fields into the new state.
-  """
+  # Regenerate state, schedule next azan, and broadcast update.
+  # Optionally merge additional fields into the new state.
   defp reschedule_next_azan(additional_fields \\ %{}) do
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
       generate_state()
+
+    schedule_azan(next_prayer_name, time_to_azan)
+
+    updated_state = Map.merge(new_state, additional_fields)
+    broadcast_state_update(updated_state)
+    updated_state
+  end
+
+  # Returns the next prayer in the daily sequence after the given prayer.
+  defp next_prayer_in_sequence(:fajr), do: :dhuhr
+  defp next_prayer_in_sequence(:dhuhr), do: :asr
+  defp next_prayer_in_sequence(:asr), do: :maghrib
+  defp next_prayer_in_sequence(:maghrib), do: :isha
+  defp next_prayer_in_sequence(:isha), do: :fajr
+  defp next_prayer_in_sequence(:none), do: :fajr
+
+  # Reschedule after stopping azan.
+  # Always recalculate based on current time to avoid incorrectly advancing the current prayer.
+  defp reschedule_after_prayer(_stopped_prayer, additional_fields) do
+    # Recalculate everything based on current time instead of trying to skip prayers
+    today_prayer_time = fetch_prayer_time(:today)
+    next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(DateTime.utc_now())
+    current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(DateTime.utc_now())
+
+    # Calculate time to the actual next prayer based on current time
+    {next_prayer_name, time_to_azan, prayer_time} =
+      calc_time_to_azan(next_prayer_name, today_prayer_time)
+
+    new_state = %__MODULE__{
+      today_prayer_time: prayer_time,
+      next_prayer_name: next_prayer_name,
+      current_prayer_name: current_prayer_name,
+      time_to_azan: time_to_azan,
+      scheduled_at: DateTime.utc_now(),
+      azan_playing: false
+    }
 
     schedule_azan(next_prayer_name, time_to_azan)
 

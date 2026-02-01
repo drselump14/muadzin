@@ -195,7 +195,7 @@ Other methods available from `Azan.CalculationMethod`:
 
 ### Debugging on Device
 - SSH into device after burning firmware with networking enabled
-- Use IEx: `ssh nerves.local` (password: depends on config)
+- Use IEx: `ssh muadzin.local` (password: depends on config)
 - Check logs: RingLogger stores recent logs in memory
 - View state: `GenServer.call(Muadzin.Scheduler, :fetch_state)`
 

@@ -1,0 +1,152 @@
+# =============================================================================
+# Muadzin Prayer Times Integration Package
+# =============================================================================
+# Place this file in your Home Assistant config/packages/ folder
+# as "muadzin.yaml"
+#
+# Make sure your configuration.yaml has:
+# homeassistant:
+#   packages: !include_dir_named packages
+# =============================================================================
+
+# REST API Integration
+rest:
+  - resource: http://192.168.0.25/api/prayers
+    scan_interval: 60
+    sensor:
+      - name: "Prayer Times"
+        unique_id: muadzin_prayer_times
+        value_template: "{{ value_json.next_prayer_name }}"
+        json_attributes:
+          - prayers
+          - next_prayer_name
+          - current_prayer_name
+          - time_to_next_azan_minutes
+          - azan_playing
+
+# Template Sensors
+template:
+  - sensor:
+      # Next prayer name
+      - name: "Next Prayer"
+        unique_id: muadzin_next_prayer
+        state: "{{ state_attr('sensor.prayer_times', 'next_prayer_name') }}"
+        icon: mdi:mosque
+
+      # Current prayer name
+      - name: "Current Prayer"
+        unique_id: muadzin_current_prayer
+        state: "{{ state_attr('sensor.prayer_times', 'current_prayer_name') }}"
+        icon: mdi:book-open-variant
+
+      # Time to next azan in minutes
+      - name: "Time to Next Azan"
+        unique_id: muadzin_time_to_azan
+        state: "{{ state_attr('sensor.prayer_times', 'time_to_next_azan_minutes') }}"
+        unit_of_measurement: "minutes"
+        icon: mdi:clock-outline
+
+      # Fajr prayer time
+      - name: "Fajr Prayer Time"
+        unique_id: muadzin_fajr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set fajr = prayers | selectattr('name', 'equalto', 'fajr') | first %}
+            {{ fajr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-sunset-up
+
+      # Dhuhr prayer time
+      - name: "Dhuhr Prayer Time"
+        unique_id: muadzin_dhuhr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set dhuhr = prayers | selectattr('name', 'equalto', 'dhuhr') | first %}
+            {{ dhuhr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:white-balance-sunny
+
+      # Asr prayer time
+      - name: "Asr Prayer Time"
+        unique_id: muadzin_asr_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set asr = prayers | selectattr('name', 'equalto', 'asr') | first %}
+            {{ asr.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-partly-cloudy
+
+      # Maghrib prayer time
+      - name: "Maghrib Prayer Time"
+        unique_id: muadzin_maghrib_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set maghrib = prayers | selectattr('name', 'equalto', 'maghrib') | first %}
+            {{ maghrib.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-sunset-down
+
+      # Isha prayer time
+      - name: "Isha Prayer Time"
+        unique_id: muadzin_isha_time
+        state: >
+          {% set prayers = state_attr('sensor.prayer_times', 'prayers') %}
+          {% if prayers %}
+            {% set isha = prayers | selectattr('name', 'equalto', 'isha') | first %}
+            {{ isha.time | as_datetime | as_local }}
+          {% endif %}
+        icon: mdi:weather-night
+
+  # Binary sensors
+  - binary_sensor:
+      - name: "Azan is Playing"
+        unique_id: muadzin_azan_is_playing
+        state: "{{ state_attr('sensor.prayer_times', 'azan_playing') == true }}"
+        device_class: sound
+
+# REST Commands for controlling azan
+rest_command:
+  # Stop the azan
+  muadzin_stop_azan:
+    url: http://192.168.0.25/api/azan/stop
+    method: POST
+    content_type: "application/json"
+
+  # Trigger the azan manually
+  muadzin_trigger_azan:
+    url: http://192.168.0.25/api/azan/trigger
+    method: POST
+    content_type: "application/json"
+
+# Optional: Automations
+automation:
+  # Notify 5 minutes before prayer time
+  - id: muadzin_prayer_time_reminder
+    alias: "Prayer Time Reminder"
+    trigger:
+      - platform: template
+        value_template: "{{ states('sensor.time_to_next_azan') | int == 5 }}"
+    action:
+      - service: notify.notify
+        data:
+          title: "Prayer Time Soon"
+          message: >
+            {{ states('sensor.next_prayer') | title }} prayer in 5 minutes
+
+  # Notify when azan starts playing
+  - id: muadzin_azan_started
+    alias: "Azan Started Playing"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.azan_is_playing
+        to: "on"
+    action:
+      - service: notify.notify
+        data:
+          title: "Azan"
+          message: >
+            {{ states('sensor.current_prayer') | title }} azan is now playing

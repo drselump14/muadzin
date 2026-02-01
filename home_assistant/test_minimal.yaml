@@ -1,0 +1,27 @@
+# =============================================================================
+# MINIMAL TEST CONFIGURATION - Use this to diagnose issues
+# =============================================================================
+#
+# Add ONLY this to your configuration.yaml, restart, and check if it works
+#
+# =============================================================================
+
+rest:
+  - resource: http://192.168.0.25/api/prayers
+    scan_interval: 60
+    sensor:
+      - name: "Prayer Times Test"
+        unique_id: muadzin_prayer_times_test
+        value_template: "{{ value_json.next_prayer_name }}"
+        json_attributes:
+          - prayers
+          - next_prayer_name
+          - current_prayer_name
+          - time_to_next_azan_minutes
+          - azan_playing
+
+# After restarting Home Assistant:
+# 1. Go to Developer Tools > States
+# 2. Search for "prayer"
+# 3. You should see: sensor.prayer_times_test
+# 4. If you see it, the REST integration is working!

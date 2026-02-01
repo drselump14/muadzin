@@ -47,4 +47,22 @@ defmodule MuadzinWeb.Api.PrayerController do
       azan_playing: state.azan_playing
     })
   end
+
+  def stop_azan(conn, _params) do
+    Muadzin.Scheduler.stop_azan()
+
+    json(conn, %{
+      success: true,
+      message: "Azan stopped"
+    })
+  end
+
+  def trigger_azan(conn, _params) do
+    Muadzin.Scheduler.trigger_azan()
+
+    json(conn, %{
+      success: true,
+      message: "Azan triggered"
+    })
+  end
 end
