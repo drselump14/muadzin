@@ -157,7 +157,6 @@ defmodule Muadzin.Scheduler do
         %{
           azan_process_pid: pid,
           azan_timer_ref: timer_ref,
-          next_prayer_name: stopped_prayer,
           is_test_azan: is_test
         } = state
       ) do
@@ -248,52 +247,6 @@ defmodule Muadzin.Scheduler do
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
       generate_state()
-
-    schedule_azan(next_prayer_name, time_to_azan)
-
-    updated_state = Map.merge(new_state, additional_fields)
-    broadcast_state_update(updated_state)
-    updated_state
-  end
-
-  # Returns the next prayer in the daily sequence after the given prayer.
-  defp next_prayer_in_sequence(:fajr), do: :dhuhr
-  defp next_prayer_in_sequence(:dhuhr), do: :asr
-  defp next_prayer_in_sequence(:asr), do: :maghrib
-  defp next_prayer_in_sequence(:maghrib), do: :isha
-  defp next_prayer_in_sequence(:isha), do: :fajr
-  defp next_prayer_in_sequence(:none), do: :fajr
-
-  # Reschedule after stopping azan.
-  # Always recalculate based on current time to avoid incorrectly advancing the current prayer.
-  defp reschedule_after_prayer(stopped_prayer, additional_fields) do
-    # Recalculate everything based on current time instead of trying to skip prayers
-    today_prayer_time = fetch_prayer_time(:today)
-    next_prayer_name = today_prayer_time |> PrayerTime.next_prayer(DateTime.utc_now())
-    current_prayer_name = today_prayer_time |> PrayerTime.current_prayer(DateTime.utc_now())
-
-    # If the next prayer is the same one we just stopped AND we're still in that prayer's time,
-    # skip to the next prayer in sequence to avoid immediately replaying the azan.
-    # But only do this if the current prayer matches the stopped prayer (meaning we haven't moved past it yet).
-    next_prayer_name =
-      if next_prayer_name == stopped_prayer and current_prayer_name == stopped_prayer do
-        next_prayer_in_sequence(stopped_prayer)
-      else
-        next_prayer_name
-      end
-
-    # Calculate time to the actual next prayer based on current time
-    {next_prayer_name, time_to_azan, prayer_time} =
-      calc_time_to_azan(next_prayer_name, today_prayer_time)
-
-    new_state = %__MODULE__{
-      today_prayer_time: prayer_time,
-      next_prayer_name: next_prayer_name,
-      current_prayer_name: current_prayer_name,
-      time_to_azan: time_to_azan,
-      scheduled_at: DateTime.utc_now(),
-      azan_playing: false
-    }
 
     schedule_azan(next_prayer_name, time_to_azan)
 
