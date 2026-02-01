@@ -191,10 +191,12 @@ defmodule Muadzin.Scheduler do
 
     broadcast_azan_status(:stopped, nil)
 
-    # If this was a test azan, don't reschedule - just reset state
+    # When stopping azan:
+    # - Test azan: Just reset playback state, don't touch schedule
+    # - Real azan: Recalculate next prayer based on current time (don't skip prayers incorrectly)
     updated_state =
       if is_test do
-        debug_log("Test azan stopped - not rescheduling")
+        debug_log("Test azan stopped - schedule unaffected")
 
         %{
           state
@@ -204,8 +206,11 @@ defmodule Muadzin.Scheduler do
             is_test_azan: false
         }
       else
-        # Schedule the prayer AFTER the one being stopped to avoid immediate replay
-        reschedule_after_prayer(stopped_prayer, %{
+        debug_log("Real azan stopped - recalculating schedule from current time")
+
+        # Use reschedule_next_azan instead of reschedule_after_prayer
+        # This recalculates based on current time without skipping logic
+        reschedule_next_azan(%{
           azan_playing: false,
           azan_process_pid: nil,
           azan_timer_ref: nil,
