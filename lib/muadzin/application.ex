@@ -48,6 +48,7 @@ defmodule Muadzin.Application do
       # Children that only run on the host
       # Starts a worker by calling: Muadzin.Worker.start_link(arg)
       # {Muadzin.Worker, arg},
+      {Muadzin.AudioPlayer, name: Muadzin.AudioPlayer},
       {Muadzin.Scheduler, name: Muadzin.Scheduler},
       MuadzinWeb.Endpoint
     ]
@@ -58,6 +59,7 @@ defmodule Muadzin.Application do
       # Children for all targets except host
       # Starts a worker by calling: Muadzin.Worker.start_link(arg)
       # {Muadzin.Worker, arg},
+      {Muadzin.AudioPlayer, name: Muadzin.AudioPlayer},
       {Muadzin.Scheduler, name: Muadzin.Scheduler},
       MuadzinWeb.Endpoint
     ]
