@@ -17,8 +17,6 @@ defmodule Muadzin.Scheduler do
     field(:current_prayer_name, :atom, enforce: true)
     field(:time_to_azan, :integer, enforce: true)
     field(:scheduled_at, DateTime.t(), enforce: true)
-    field(:azan_performed_at, DateTime.t())
-    field(:azan_playing, boolean(), default: false)
   end
 
   def start_link(opts) do
@@ -44,21 +42,24 @@ defmodule Muadzin.Scheduler do
   end
 
   @impl true
-  def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name} = state) do
+  def handle_info(:play_azan, %__MODULE__{next_prayer_name: current_prayer_name} = _state) do
     debug_log("Playing azan for #{current_prayer_name}")
 
-    # Play azan audio using AudioPlayer
+    # Play azan audio using AudioPlayer (will automatically play dua after)
     play_azan_audio(current_prayer_name)
 
     broadcast_azan_status(:started, current_prayer_name)
 
-    {:noreply, %{state | azan_playing: true}}
+    # Immediately reschedule to next prayer
+    updated_state = reschedule_next_azan()
+    {:noreply, updated_state}
   end
 
   # Handle test azan trigger (manual trigger from API/UI)
   @impl true
   def handle_info(:play_test_azan, %__MODULE__{next_prayer_name: current_prayer_name} = state) do
-    debug_log("Playing TEST azan for #{current_prayer_name}")
+    prayer_name_formatted = current_prayer_name |> Atom.to_string() |> String.capitalize()
+    debug_log("Test azan: #{prayer_name_formatted}")
 
     # Play azan audio using AudioPlayer (as a test, doesn't affect schedule)
     play_azan_audio(current_prayer_name)
@@ -67,53 +68,22 @@ defmodule Muadzin.Scheduler do
     {:noreply, state}
   end
 
-  # Handle audio player status updates
+  # Handle audio player status updates - just broadcast for UI
   @impl true
   def handle_info({:audio_status, :started, _filename}, state) do
-    # Audio started playing (could be from test trigger or scheduled azan)
     broadcast_azan_status(:started, state.next_prayer_name)
     {:noreply, state}
   end
 
   @impl true
-  def handle_info({:audio_status, :finished, _filename}, %{azan_playing: true} = _state) do
-    # Scheduled azan finished - reschedule to next prayer
-    debug_log("Scheduled azan finished - rescheduling to next prayer")
-
+  def handle_info({:audio_status, :finished, _filename}, state) do
     broadcast_azan_status(:stopped, nil)
-
-    updated_state =
-      reschedule_next_azan(%{
-        azan_performed_at: DateTime.utc_now(),
-        azan_playing: false
-      })
-
-    broadcast_state_update(updated_state)
-    {:noreply, updated_state}
-  end
-
-  @impl true
-  def handle_info({:audio_status, :finished, _filename}, %{azan_playing: false} = state) do
-    # Test azan finished - no rescheduling needed
-    debug_log("Test azan finished - schedule unaffected")
     {:noreply, state}
   end
 
   @impl true
-  def handle_info({:audio_status, :stopped, _filename}, %{azan_playing: true} = _state) do
-    # Scheduled azan was stopped manually - recalculate schedule
-    debug_log("Scheduled azan stopped - recalculating schedule")
-
+  def handle_info({:audio_status, :stopped, _filename}, state) do
     broadcast_azan_status(:stopped, nil)
-
-    updated_state = reschedule_next_azan(%{azan_playing: false})
-    broadcast_state_update(updated_state)
-    {:noreply, updated_state}
-  end
-
-  @impl true
-  def handle_info({:audio_status, :stopped, _filename}, %{azan_playing: false} = state) do
-    # Test azan was stopped - no action needed
     {:noreply, state}
   end
 
@@ -157,17 +127,15 @@ defmodule Muadzin.Scheduler do
   end
 
   # Regenerate state, schedule next azan, and broadcast update.
-  # Optionally merge additional fields into the new state.
-  defp reschedule_next_azan(additional_fields \\ %{}) do
+  defp reschedule_next_azan do
     new_state =
       %__MODULE__{next_prayer_name: next_prayer_name, time_to_azan: time_to_azan} =
       generate_state()
 
     schedule_azan(next_prayer_name, time_to_azan)
 
-    updated_state = Map.merge(new_state, additional_fields)
-    broadcast_state_update(updated_state)
-    updated_state
+    broadcast_state_update(new_state)
+    new_state
   end
 
   defp broadcast_azan_status(status, prayer_name) do
@@ -189,7 +157,6 @@ defmodule Muadzin.Scheduler do
   end
 
   def trigger_azan(server \\ __MODULE__) do
-    debug_log("Trigger TEST azan called (will not affect schedule)")
     Process.send(server, :play_test_azan, [])
     :ok
   end
@@ -284,8 +251,7 @@ defmodule Muadzin.Scheduler do
       next_prayer_name: next_prayer_name,
       current_prayer_name: current_prayer_name,
       time_to_azan: time_to_azan,
-      scheduled_at: DateTime.utc_now(),
-      azan_playing: false
+      scheduled_at: DateTime.utc_now()
     }
   end
 

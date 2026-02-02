@@ -8,3 +8,6 @@ ds:
 
 c:
   {{load_dot_iex}}
+
+bd:
+  mix firmware && ./upload.sh

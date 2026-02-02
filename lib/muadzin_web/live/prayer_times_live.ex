@@ -16,7 +16,7 @@ defmodule MuadzinWeb.PrayerTimesLive do
     socket =
       socket
       |> assign_state(state)
-      |> assign(azan_playing: state.azan_playing, current_azan_prayer: nil, debug_logs: [], show_debug: false)
+      |> assign(azan_playing: Muadzin.AudioPlayer.playing?(), current_azan_prayer: nil, debug_logs: [], show_debug: false)
 
     {:ok, socket}
   end

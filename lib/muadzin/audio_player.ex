@@ -24,7 +24,8 @@ defmodule Muadzin.AudioPlayer do
   end
 
   @doc """
-  Play an audio file. Options:
+  Play an audio file. Automatically plays dua after azan finishes.
+  Options:
   - `interruptible: true` - Allow stopping mid-playback
   - `callback_pid: pid` - Send completion message to this process
   """
@@ -62,6 +63,9 @@ defmodule Muadzin.AudioPlayer do
 
   @impl true
   def handle_cast({:play, filename, opts}, state) do
+    # Get the appropriate filename (test or original based on config)
+    filename = get_audio_filename(filename)
+
     # Only play audio on target, not on host
     if Application.get_env(:muadzin, :target) != :host do
       path = Path.join(:code.priv_dir(:muadzin), filename)
@@ -69,6 +73,7 @@ defmodule Muadzin.AudioPlayer do
       audio_player_args = Application.get_env(:muadzin, :audio_player_args)
 
       Logger.info("Playing audio: #{filename}")
+      debug_log("Playing: #{format_audio_name(filename)}")
       broadcast_status(:started, filename)
 
       case System.find_executable(audio_player_cmd) do
@@ -104,9 +109,22 @@ defmodule Muadzin.AudioPlayer do
       end
     else
       Logger.info("Skipping audio playback on host: #{filename}")
+      debug_log("Playing: #{format_audio_name(filename)}")
+
       # Simulate completion for host environment
       if callback_pid = Keyword.get(opts, :callback_pid) do
         send(callback_pid, {:audio_finished, filename, :ok})
+      end
+
+      # Simulate azan completion and trigger dua playback on host
+      if is_azan_file?(filename) do
+        debug_log("Finished: #{format_audio_name(filename)}")
+        debug_log("Playing: Dua (after azan)")
+        # Actually play the dua (which will also be simulated on host)
+        GenServer.cast(self(), {:play, "dua-after-the-azan.wav", []})
+      else
+        debug_log("Finished: #{format_audio_name(filename)}")
+        broadcast_status(:finished, filename)
       end
 
       {:noreply, state}
@@ -121,6 +139,7 @@ defmodule Muadzin.AudioPlayer do
   @impl true
   def handle_cast(:stop, %{audio_port: port, os_pid: os_pid, current_file: filename} = state) do
     Logger.info("Stopping audio: #{filename}")
+    debug_log("Stopped: #{format_audio_name(filename)}")
 
     # Kill the OS process directly
     if os_pid do
@@ -174,10 +193,38 @@ defmodule Muadzin.AudioPlayer do
       ) do
     Logger.info("Audio #{filename} finished with status: #{status}")
 
-    Port.close(port)
-    broadcast_status(:finished, filename)
+    # Check if this was an azan file - if so, play dua next
+    if is_azan_file?(filename) do
+      Logger.info("Azan finished, playing dua next")
+      debug_log("Finished: #{format_audio_name(filename)}")
+      debug_log("Playing: Dua (after azan)")
 
-    {:noreply, %{state | playing: false, audio_port: nil, current_file: nil, os_pid: nil}}
+      # Reset state and play dua
+      new_state = %{state | playing: false, audio_port: nil, current_file: nil, os_pid: nil}
+      GenServer.cast(self(), {:play, "dua-after-the-azan.wav", []})
+
+      # Close port after triggering dua playback
+      try do
+        Port.close(port)
+      rescue
+        e -> Logger.warning("Error closing port: #{inspect(e)}")
+      end
+
+      {:noreply, new_state}
+    else
+      # Not an azan file (could be dua or other), broadcast finished
+      debug_log("Finished: #{format_audio_name(filename)}")
+      broadcast_status(:finished, filename)
+
+      # Close port
+      try do
+        Port.close(port)
+      rescue
+        e -> Logger.warning("Error closing port: #{inspect(e)}")
+      end
+
+      {:noreply, %{state | playing: false, audio_port: nil, current_file: nil, os_pid: nil}}
+    end
   end
 
   # Audio timeout
@@ -213,5 +260,34 @@ defmodule Muadzin.AudioPlayer do
       "audio_player",
       {:audio_status, status, filename}
     )
+  end
+
+  defp is_azan_file?(filename) do
+    filename in ["azan.wav", "azan-fajr.wav"]
+  end
+
+  defp debug_log(message) do
+    Phoenix.PubSub.broadcast(
+      Muadzin.PubSub,
+      "prayer_times",
+      {:debug_log, message}
+    )
+  end
+
+  defp format_audio_name("azan.wav"), do: "Azan"
+  defp format_audio_name("azan-test.wav"), do: "Azan"
+  defp format_audio_name("azan-fajr.wav"), do: "Azan (Fajr)"
+  defp format_audio_name("azan-fajr-test.wav"), do: "Azan (Fajr)"
+  defp format_audio_name("dua-after-the-azan.wav"), do: "Dua"
+  defp format_audio_name("dua-after-the-azan-test.wav"), do: "Dua"
+  defp format_audio_name(filename), do: filename
+
+  defp get_audio_filename(filename) do
+    if Application.get_env(:muadzin, :use_test_audio, false) do
+      # Add -test suffix before .wav extension
+      String.replace(filename, ".wav", "-test.wav")
+    else
+      filename
+    end
   end
 end

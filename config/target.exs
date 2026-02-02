@@ -116,6 +116,10 @@ config :mdns_lite,
 
 config(:tzdata, :data_dir, "/data/tzdata")
 
+# Use original full-length audio files on target device
+config :muadzin,
+  use_test_audio: false
+
 # Configure Phoenix endpoint for Nerves target
 config :muadzin, MuadzinWeb.Endpoint,
   url: [host: "muadzin.local", port: 80, scheme: "http"],

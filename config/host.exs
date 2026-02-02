@@ -7,6 +7,10 @@ config :logger,
   backends: [:console],
   level: :debug
 
+# Use test audio files (0.1s each) for faster testing on host
+config :muadzin,
+  use_test_audio: true
+
 # Configure Phoenix endpoint for development on host
 config :muadzin, MuadzinWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],
