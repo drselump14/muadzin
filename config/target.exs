@@ -116,9 +116,9 @@ config :mdns_lite,
 
 config(:tzdata, :data_dir, "/data/tzdata")
 
-# Use original full-length audio files on target device
+# Use original full-length audio files by default on target (can override with USE_TEST_AUDIO=true)
 config :muadzin,
-  use_test_audio: false
+  use_test_audio: System.get_env("USE_TEST_AUDIO", "false") == "true"
 
 # Configure Phoenix endpoint for Nerves target
 config :muadzin, MuadzinWeb.Endpoint,

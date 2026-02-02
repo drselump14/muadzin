@@ -7,9 +7,9 @@ config :logger,
   backends: [:console],
   level: :debug
 
-# Use test audio files (0.1s each) for faster testing on host
+# Use test audio files by default on host (can override with USE_TEST_AUDIO=false)
 config :muadzin,
-  use_test_audio: true
+  use_test_audio: System.get_env("USE_TEST_AUDIO", "true") == "true"
 
 # Configure Phoenix endpoint for development on host
 config :muadzin, MuadzinWeb.Endpoint,

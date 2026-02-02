@@ -62,72 +62,48 @@ defmodule Muadzin.AudioPlayer do
   end
 
   @impl true
-  def handle_cast({:play, filename, opts}, state) do
+  def handle_cast({:play, filename, _opts}, state) do
     # Get the appropriate filename (test or original based on config)
     filename = get_audio_filename(filename)
 
-    # Only play audio on target, not on host
-    if Application.get_env(:muadzin, :target) != :host do
-      path = Path.join(:code.priv_dir(:muadzin), filename)
-      audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
-      audio_player_args = Application.get_env(:muadzin, :audio_player_args)
+    path = Path.join(:code.priv_dir(:muadzin), filename)
+    audio_player_cmd = Application.get_env(:muadzin, :audio_player_cmd)
+    audio_player_args = Application.get_env(:muadzin, :audio_player_args)
 
-      Logger.info("Playing audio: #{filename}")
-      debug_log("Playing: #{format_audio_name(filename)}")
-      broadcast_status(:started, filename)
+    Logger.info("Playing audio: #{filename}")
+    debug_log("Playing: #{format_audio_name(filename)}")
+    broadcast_status(:started, filename)
 
-      case System.find_executable(audio_player_cmd) do
-        nil ->
-          Logger.error("Audio player executable not found: #{audio_player_cmd}")
-          {:noreply, state}
+    case System.find_executable(audio_player_cmd) do
+      nil ->
+        Logger.error("Audio player executable not found: #{audio_player_cmd}")
+        {:noreply, state}
 
-        executable_path ->
-          # Spawn audio process
-          port =
-            Port.open({:spawn_executable, executable_path}, [
-              :binary,
-              :exit_status,
-              args: audio_player_args ++ [path]
-            ])
+      executable_path ->
+        # Spawn audio process
+        port =
+          Port.open({:spawn_executable, executable_path}, [
+            :binary,
+            :exit_status,
+            args: audio_player_args ++ [path]
+          ])
 
-          port_info = Port.info(port)
-          os_pid = Keyword.get(port_info, :os_pid)
+        port_info = Port.info(port)
+        os_pid = Keyword.get(port_info, :os_pid)
 
-          Logger.debug("Audio port opened: #{inspect(port)}, OS PID: #{inspect(os_pid)}")
+        Logger.debug("Audio port opened: #{inspect(port)}, OS PID: #{inspect(os_pid)}")
 
-          # Schedule timeout
-          Process.send_after(self(), {:audio_timeout, filename}, 600_000)
+        # Schedule timeout
+        Process.send_after(self(), {:audio_timeout, filename}, 600_000)
 
-          {:noreply,
-           %{
-             state
-             | playing: true,
-               audio_port: port,
-               current_file: filename,
-               os_pid: os_pid
-           }}
-      end
-    else
-      Logger.info("Skipping audio playback on host: #{filename}")
-      debug_log("Playing: #{format_audio_name(filename)}")
-
-      # Simulate completion for host environment
-      if callback_pid = Keyword.get(opts, :callback_pid) do
-        send(callback_pid, {:audio_finished, filename, :ok})
-      end
-
-      # Simulate azan completion and trigger dua playback on host
-      if is_azan_file?(filename) do
-        debug_log("Finished: #{format_audio_name(filename)}")
-        debug_log("Playing: Dua (after azan)")
-        # Actually play the dua (which will also be simulated on host)
-        GenServer.cast(self(), {:play, "dua-after-the-azan.wav", []})
-      else
-        debug_log("Finished: #{format_audio_name(filename)}")
-        broadcast_status(:finished, filename)
-      end
-
-      {:noreply, state}
+        {:noreply,
+         %{
+           state
+           | playing: true,
+             audio_port: port,
+             current_file: filename,
+             os_pid: os_pid
+         }}
     end
   end
 
@@ -204,11 +180,7 @@ defmodule Muadzin.AudioPlayer do
       GenServer.cast(self(), {:play, "dua-after-the-azan.wav", []})
 
       # Close port after triggering dua playback
-      try do
-        Port.close(port)
-      rescue
-        e -> Logger.warning("Error closing port: #{inspect(e)}")
-      end
+      close_port_safely(port)
 
       {:noreply, new_state}
     else
@@ -217,11 +189,7 @@ defmodule Muadzin.AudioPlayer do
       broadcast_status(:finished, filename)
 
       # Close port
-      try do
-        Port.close(port)
-      rescue
-        e -> Logger.warning("Error closing port: #{inspect(e)}")
-      end
+      close_port_safely(port)
 
       {:noreply, %{state | playing: false, audio_port: nil, current_file: nil, os_pid: nil}}
     end
@@ -288,6 +256,17 @@ defmodule Muadzin.AudioPlayer do
       String.replace(filename, ".wav", "-test.wav")
     else
       filename
+    end
+  end
+
+  defp close_port_safely(port) do
+    # Check if port is still open before closing
+    if Port.info(port) do
+      try do
+        Port.close(port)
+      rescue
+        ArgumentError -> :ok
+      end
     end
   end
 end
