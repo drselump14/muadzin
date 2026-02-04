@@ -105,8 +105,9 @@ template:
   - binary_sensor:
       - name: "Azan is Playing"
         unique_id: muadzin_azan_is_playing
-        state: "{{ state_attr('sensor.prayer_times', 'azan_playing') == true }}"
+        state: "{{ state_attr('sensor.prayer_times', 'azan_playing') | default(false) }}"
         device_class: sound
+        availability: "{{ states('sensor.prayer_times') not in ['unavailable', 'unknown'] }}"
 
 # REST Commands for controlling azan
 rest_command:
