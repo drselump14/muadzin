@@ -44,7 +44,8 @@ defmodule MuadzinWeb.Api.PrayerController do
       next_prayer_name: state.next_prayer_name,
       current_prayer_name: state.current_prayer_name,
       time_to_next_azan_minutes: state.time_to_azan,
-      azan_playing: Muadzin.AudioPlayer.playing?()
+      azan_playing: Muadzin.AudioPlayer.playing?(),
+      azan_playing_for: state.azan_playing_for
     })
   end
 

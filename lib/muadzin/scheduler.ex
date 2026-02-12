@@ -17,6 +17,7 @@ defmodule Muadzin.Scheduler do
     field(:current_prayer_name, :atom, enforce: true)
     field(:time_to_azan, :integer, enforce: true)
     field(:scheduled_at, DateTime.t(), enforce: true)
+    field(:azan_playing_for, :atom | nil)
   end
 
   def start_link(opts) do
@@ -50,8 +51,10 @@ defmodule Muadzin.Scheduler do
 
     broadcast_azan_status(:started, current_prayer_name)
 
-    # Immediately reschedule to next prayer
+    # Immediately reschedule to next prayer, and mark which prayer's azan is playing
     updated_state = reschedule_next_azan()
+    updated_state = %{updated_state | azan_playing_for: current_prayer_name}
+    broadcast_state_update(updated_state)
     {:noreply, updated_state}
   end
 
@@ -71,20 +74,24 @@ defmodule Muadzin.Scheduler do
   # Handle audio player status updates - just broadcast for UI
   @impl true
   def handle_info({:audio_status, :started, _filename}, state) do
-    broadcast_azan_status(:started, state.next_prayer_name)
+    broadcast_azan_status(:started, state.azan_playing_for || state.next_prayer_name)
     {:noreply, state}
   end
 
   @impl true
   def handle_info({:audio_status, :finished, _filename}, state) do
     broadcast_azan_status(:stopped, nil)
-    {:noreply, state}
+    new_state = %{state | azan_playing_for: nil}
+    broadcast_state_update(new_state)
+    {:noreply, new_state}
   end
 
   @impl true
   def handle_info({:audio_status, :stopped, _filename}, state) do
     broadcast_azan_status(:stopped, nil)
-    {:noreply, state}
+    new_state = %{state | azan_playing_for: nil}
+    broadcast_state_update(new_state)
+    {:noreply, new_state}
   end
 
   @impl true
@@ -251,7 +258,8 @@ defmodule Muadzin.Scheduler do
       next_prayer_name: next_prayer_name,
       current_prayer_name: current_prayer_name,
       time_to_azan: time_to_azan,
-      scheduled_at: DateTime.utc_now()
+      scheduled_at: DateTime.utc_now(),
+      azan_playing_for: nil
     }
   end
 

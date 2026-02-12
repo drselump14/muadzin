@@ -23,6 +23,7 @@ rest:
           - current_prayer_name
           - time_to_next_azan_minutes
           - azan_playing
+          - azan_playing_for
 
 # Template Sensors
 template:
@@ -38,6 +39,12 @@ template:
         unique_id: muadzin_current_prayer
         state: "{{ state_attr('sensor.prayer_times', 'current_prayer_name') }}"
         icon: mdi:book-open-variant
+
+      # Prayer whose azan is currently playing
+      - name: "Azan Playing For"
+        unique_id: muadzin_azan_playing_for
+        state: "{{ state_attr('sensor.prayer_times', 'azan_playing_for') }}"
+        icon: mdi:bullhorn
 
       # Time to next azan in minutes
       - name: "Time to Next Azan"
@@ -150,4 +157,4 @@ automation:
         data:
           title: "Azan"
           message: >
-            {{ states('sensor.current_prayer') | title }} azan is now playing
+            {{ states('sensor.azan_playing_for') | title }} azan is now playing
